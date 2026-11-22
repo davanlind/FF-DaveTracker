@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>F&amp;F Tracker</title>
+  <meta name="description" content="Track work time against weekly and fortnightly targets.">
+  <meta name="theme-color" content="#24302a">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#today"><span class="logo">F&amp;F</span><span>Tracker</span></a>
+    <a class="timer-badge" id="timerBadge" href="#today" hidden></a>
+    <button class="sync-pill local" id="syncPill" data-action="open-settings" type="button">
+      <span class="dot"></span><span class="sync-label">Only on this device</span>
+    </button>
+  </header>
+
+  <main id="view" class="view" tabindex="-1"></main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Screens">
+    <a href="#today" data-tab="today">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg>
+      <span>Today</span>
+    </a>
+    <a href="#plan" data-tab="plan">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+      <span>Plan</span>
+    </a>
+    <a href="#review" data-tab="review">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span>Review</span>
+    </a>
+    <a href="#log" data-tab="log">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>
+      <span>Log</span>
+    </a>
+    <a href="#tasks" data-tab="tasks">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l2 2 4-4M4 17l2 2 4-4M13 7h7M13 17h7"/></svg>
+      <span>Tasks</span>
+    </a>
+  </nav>
+
+  <dialog id="modal" class="modal"></dialog>
+  <dialog id="confirm-modal" class="modal small"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <noscript><p class="noscript">F&amp;F Tracker needs JavaScript turned on.</p></noscript>
+
+  <!-- Order matters: each file uses the ones above it. -->
+  <script src="js/util.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/views/today.js"></script>
+  <script src="js/views/log.js"></script>
+  <script src="js/views/plan.js"></script>
+  <script src="js/views/review.js"></script>
+  <script src="js/views/tasks.js"></script>
+  <script src="js/views/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
