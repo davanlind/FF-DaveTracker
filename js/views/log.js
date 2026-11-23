@@ -40,7 +40,7 @@ FF.views.log = (() => {
               </span>
               ${e.notes ? `<span class="entry-notes">${esc(e.notes)}</span>` : ''}
             </span>
-            <span class="entry-dur">${U.fmtMins(e.minutes)}</span>
+            <span class="entry-dur">${U.fmtMins(e.minutes)}<span class="entry-edit">✎ Edit</span></span>
           </button>
         </li>`;
       })
@@ -65,6 +65,7 @@ FF.views.log = (() => {
         </select>
         <button class="btn ghost" data-action="log-csv">⇩ Download CSV</button>
       </div>
+      <p class="hint">Tap an entry to change its date, times, task or notes.</p>
       <section class="stats">
         <div class="stat"><span class="stat-num">${U.fmtMins(total)}</span><span class="stat-label">Total</span></div>
         <div class="stat"><span class="stat-num">${U.fmtMins(split.solo)}</span><span class="stat-label">Solo</span></div>

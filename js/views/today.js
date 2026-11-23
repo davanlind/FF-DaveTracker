@@ -20,7 +20,7 @@ FF.views.today = (() => {
           <div class="eyebrow">Working on</div>
           <div class="timer-task">${esc(t.task)} ${t.type === 'One-off' ? '<span class="badge">One-off</span>' : ''}</div>
           <div class="clock" data-elapsed="${esc(t.startedAt)}">${U.fmtClock(Date.now() - started.getTime())}</div>
-          <div class="muted small">Started ${U.hm(started)}${item ? ` · target ${U.fmtMins(item.targetMinutes)}, ${U.fmtMins(M.actualFor(item.id))} logged before this` : ''}</div>
+          <div class="muted small">Started ${U.hm(started)}${U.ymd(started) !== U.today() ? ` on ${esc(U.fmtDate(U.ymd(started)))}` : ''} · <button class="link-btn inline" data-action="timer-adjust">change</button>${item ? ` · target ${U.fmtMins(item.targetMinutes)}, ${U.fmtMins(M.actualFor(item.id))} logged before this` : ''}</div>
           <div class="btn-row">
             <button class="btn primary big" data-action="timer-stop">■ Stop &amp; save</button>
           </div>
@@ -143,6 +143,33 @@ FF.views.today = (() => {
       entry: {
         task: t.task, type: t.type, taskId: t.taskId, planItemId: t.planItemId, planId: t.planId,
         date: U.ymd(started), start: U.hm(started), end: U.fromMins(U.toMins(U.hm(started)) + minutes), minutes,
+      },
+    });
+  };
+
+  // Forgot to press start? Move the running timer's start back (or forward).
+  FF.actions['timer-adjust'] = () => {
+    const t = S.timer();
+    if (!t) return;
+    const started = new Date(t.startedAt);
+    FF.ui.modal({
+      title: 'Change start time',
+      body: `
+        <p class="muted">Forgot to start the timer? Set when you really started. It keeps running from there.</p>
+        <div class="row2">
+          <div class="field"><label for="ta-date">Date</label><input id="ta-date" type="date" name="date" value="${esc(U.ymd(started))}" max="${esc(U.today())}" required></div>
+          <div class="field"><label for="ta-time">Start time</label><input id="ta-time" type="time" name="time" value="${esc(U.hm(started))}" required></div>
+        </div>`,
+      submitLabel: 'Update timer',
+      onSubmit: (form) => {
+        const f = form.elements;
+        if (!f.date.value || !f.time.value) return FF.ui.invalid(form, 'time', 'Pick a date and time.');
+        const [h, m] = f.time.value.split(':').map(Number);
+        const d = U.parseYmd(f.date.value);
+        d.setHours(h, m, 0, 0);
+        if (d.getTime() > Date.now()) return FF.ui.invalid(form, 'time', "That's in the future. Pick a time before now.");
+        S.setTimer({ ...t, startedAt: d.toISOString() });
+        FF.ui.toast(`Timer now started at ${f.time.value}`, 'ok');
       },
     });
   };

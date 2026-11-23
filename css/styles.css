@@ -169,7 +169,9 @@ textarea { resize: vertical; }
 .entry-name { font-weight: 600; }
 .entry-meta { display: flex; gap: 5px; flex-wrap: wrap; }
 .entry-notes { font-size: 0.85rem; color: var(--muted); }
-.entry-dur { font-weight: 700; font-variant-numeric: tabular-nums; }
+.entry-dur { font-weight: 700; font-variant-numeric: tabular-nums; display: grid; justify-items: end; gap: 4px; }
+.entry-edit { font-size: 0.72rem; font-weight: 600; color: var(--accent); }
+.link-btn.inline { padding: 0; font-size: inherit; color: inherit; }
 
 /* ---------- stats ---------- */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }

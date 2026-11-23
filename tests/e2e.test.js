@@ -190,6 +190,32 @@ async function main() {
     await a.shot('07-review');
   });
 
+  await step('change the date and times of a logged entry', async () => {
+    await a.click('a[href="#log"]');
+    await a.waitForSelector('.entry');
+    const id = await a.evaluate(() => FF.store.all('log').find((e) => e.task === 'Unload surprise delivery').id);
+    const yesterday = await a.evaluate(() => FF.util.addDays(FF.util.today(), -1));
+    await a.click(`[data-action="entry-edit"][data-id="${id}"]`);
+    await a.fill('#f-date', yesterday);
+    await a.fill('#f-start', '07:15');
+    await a.fill('#f-end', '08:00');
+    await a.press('#f-end', 'Tab');
+    assert.strictEqual(await a.inputValue('#f-dur'), '45m');
+    await a.click('#modal button[type=submit]');
+    const e = await a.evaluate((i) => FF.store.get('log', i), id);
+    assert.deepStrictEqual([e.date, e.start, e.end, e.minutes], [yesterday, '07:15', '08:00', 45]);
+    // put it back on today for the later checks (yesterday may be last week, so show everything)
+    await a.selectOption('#logRange', 'all');
+    await a.click(`[data-action="entry-edit"][data-id="${id}"]`);
+    await a.fill('#f-date', await a.evaluate(() => FF.util.today()));
+    await a.fill('#f-start', '13:00');
+    await a.fill('#f-end', '14:30');
+    await a.press('#f-end', 'Tab');
+    await a.click('#modal button[type=submit]');
+    assert.strictEqual(await a.evaluate((i) => FF.store.get('log', i).minutes, id), 90);
+    await a.selectOption('#logRange', 'this-week');
+  });
+
   await step('log screen lists entries and builds a CSV', async () => {
     await a.click('a[href="#log"]');
     await a.waitForSelector('.entry');
@@ -274,6 +300,31 @@ async function main() {
     assert.strictEqual(await a.evaluate(() => document.getElementById('modal').open), true);
     assert.strictEqual(await a.evaluate(() => FF.store.all('log').length), 3);
     await a.click('#modal [data-close].btn');
+  });
+
+  await step('move a running timer\'s start time back', async () => {
+    await a.goto(base + '#today');
+    await a.selectOption('#startPick', '__oneoff');
+    await a.fill('#startOneOff', 'Late start');
+    await a.click('form[data-form="timer-start"] button[type=submit]');
+    await a.click('[data-action="timer-adjust"]');
+    const earlier = await a.evaluate(() => FF.util.fromMins(FF.util.toMins(FF.util.nowHm()) - 30));
+    const onDate = await a.evaluate(() => { const d = new Date(Date.now() - 30 * 60000); return FF.util.ymd(d); });
+    await a.fill('#ta-date', onDate);
+    await a.fill('#ta-time', earlier);
+    await a.click('#modal button[type=submit]');
+    const mins = await a.evaluate(() => (Date.now() - new Date(FF.store.timer().startedAt).getTime()) / 60000);
+    assert.ok(mins >= 29 && mins < 32, `timer moved back ~30 min (got ${mins})`);
+    // future times are refused
+    await a.click('[data-action="timer-adjust"]');
+    await a.fill('#ta-date', await a.evaluate(() => FF.util.today()));
+    await a.fill('#ta-time', '23:59');
+    await a.click('#modal button[type=submit]');
+    if (await a.evaluate(() => FF.util.nowHm() < '23:59')) {
+      assert.match(await a.textContent('#modal .field-error'), /future/);
+    }
+    await a.evaluate(() => document.getElementById('modal').open && document.getElementById('modal').close());
+    await a.evaluate(() => FF.store.setTimer(null));
   });
 
   await step('timer survives a page reload', async () => {
