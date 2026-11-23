@@ -113,6 +113,18 @@ test('active timers keep their list of time segments', () => {
   assert.strictEqual(call.get({ action: 'all', key: 'test-key' }).data.active.length, 0);
 });
 
+test('summary (for the watch) only returns recent log rows', () => {
+  const { call } = loadScript();
+  const row = (id, date) => ({ op: 'upsert', table: 'log', record: { id, date, start: '09:00', end: '10:00', minutes: 60, task: 'X' } });
+  call.post({ key: 'test-key', action: 'apply', ops: [row('log_old', '2026-08-01'), row('log_new', '2026-11-20')] });
+  call.post({ key: 'test-key', action: 'apply', ops: [{ op: 'upsert', table: 'tasks', record: { id: 'task_1', name: 'Photoshoot', active: true } }] });
+  const r = call.get({ action: 'summary', since: '2026-10-01', key: 'test-key' });
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.data.log.map((x) => x.id), ['log_new']);
+  assert.strictEqual(r.data.tasks.length, 1);
+  assert.strictEqual(call.get({ action: 'summary', key: 'nope' }).ok, false);
+});
+
 test('bad input gives a readable error, not a crash', () => {
   const { call } = loadScript();
   assert.strictEqual(call.post('not json').ok, false);

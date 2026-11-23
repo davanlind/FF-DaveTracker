@@ -3,11 +3,13 @@
  * and clock times as 'HH:MM' strings. This avoids time-zone surprises. */
 window.FF = window.FF || {};
 
-FF.VERSION = '1.6.0';
+FF.VERSION = '1.7.0';
 
 /** True when running inside the Android app (android/ folder), false on the website. */
 FF.isApp = !!window.FFAndroid;
 FF.APK_URL = 'https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker.apk';
+FF.WATCH_APK_URL = 'https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker-Watch.apk';
+FF.WATCH_GUIDE_URL = 'https://github.com/davanlind/FF-DaveTracker/blob/main/docs/WATCH_APP.md';
 
 FF.util = (() => {
   const pad = (n) => String(n).padStart(2, '0');

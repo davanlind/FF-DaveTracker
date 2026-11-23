@@ -49,6 +49,16 @@ FF.views.settings = (() => {
       </section>`}
 
       <section class="card">
+        <div class="card-head"><h3>Pixel Watch</h3></div>
+        <p class="muted">The watch app shows what you're working on and lets you start, switch, pause and finish tasks from your wrist.
+        ${FF.isApp ? 'This phone app links it to your Google Sheet automatically once you\'re connected above.' : 'Install the Android app on your phone too: it links the watch to your Sheet.'}</p>
+        <div class="btn-row wrap">
+          <a class="btn" href="${esc(FF.WATCH_APK_URL)}">⇩ Watch app (APK)</a>
+          <a class="btn ghost" href="${esc(FF.WATCH_GUIDE_URL)}" target="_blank" rel="noopener">How to install it</a>
+        </div>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h3>About</h3></div>
         <p class="muted small">F&amp;F Tracker v${esc(FF.VERSION)}${FF.isApp ? ` · Android app ${esc(window.FFAndroid.appVersion ? window.FFAndroid.appVersion() : '')} · <a href="${esc(FF.APK_URL)}">Get the latest APK</a>` : ''} · <a href="https://github.com/davanlind/FF-DaveTracker" target="_blank" rel="noopener">Code on GitHub</a></p>
       </section>`;

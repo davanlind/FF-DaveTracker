@@ -123,7 +123,7 @@ const SCHEMA = {
 
 /* ======================= web app entry points ======================= */
 
-/** GET ?action=ping|all&key=... */
+/** GET ?action=ping|all|summary&key=...   (summary: like all, but the log only from &since=YYYY-MM-DD; used by the watch) */
 function doGet(e) {
   return respond_(() => {
     const p = (e && e.parameter) || {};
@@ -132,6 +132,12 @@ function doGet(e) {
       return { ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName() };
     }
     if (p.action === 'all') return { ok: true, data: readAll_() };
+    if (p.action === 'summary') {
+      const data = readAll_();
+      const since = String(p.since || '');
+      if (since) data.log = data.log.filter((r) => String(r.date) >= since);
+      return { ok: true, data };
+    }
     throw new Error('Unknown action');
   });
 }

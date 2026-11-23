@@ -13,4 +13,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "FF-Tracker"
-include(":app")
+include(":app")  // phone app (WebView shell around the website)
+include(":wear") // Pixel Watch / Wear OS app

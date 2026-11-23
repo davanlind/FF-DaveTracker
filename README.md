@@ -16,6 +16,8 @@ same Google Sheet, they share all their data, so it doesn't matter where you ent
 
 **📱 Android app:** [download FF-Tracker.apk](https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker.apk). Install steps are in [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
 
+**⌚ Pixel Watch app:** [download FF-Tracker-Watch.apk](https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker-Watch.apk). How to put it on the watch: [docs/WATCH_APP.md](docs/WATCH_APP.md).
+
 ---
 
 ## Getting it running (one-off setup)

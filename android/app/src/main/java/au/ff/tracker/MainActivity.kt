@@ -28,6 +28,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
+import com.google.android.gms.wearable.PutDataMapRequest
+import com.google.android.gms.wearable.Wearable
 
 /**
  * The whole Android app: one screen showing the F&F Tracker web app.
@@ -166,6 +168,23 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun appVersion(): String =
             packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+
+        /**
+         * Give the watch app the Google Sheet link + key (Wear OS Data Layer).
+         * Both apps share the id au.ff.tracker and signing key, which is what lets them see each other.
+         */
+        @JavascriptInterface
+        fun shareConfig(url: String, key: String) {
+            try {
+                val req = PutDataMapRequest.create("/ff-config").apply {
+                    dataMap.putString("url", url)
+                    dataMap.putString("key", key)
+                }.asPutDataRequest().setUrgent()
+                Wearable.getDataClient(this@MainActivity).putDataItem(req)
+            } catch (e: Exception) {
+                // No watch or no Play services: nothing to do.
+            }
+        }
 
         /** Save a CSV or backup file into Downloads/FF Tracker. Returns true if it worked. */
         @JavascriptInterface

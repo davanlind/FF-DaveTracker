@@ -34,7 +34,8 @@ js/app.js                  router (#today, #plan…), click/submit/change wiring
 apps-script/Code.gs        Google Apps Script "backend"; pasted into the Sheet by the user
 docs/GOOGLE_SHEET_SETUP.md step-by-step setup for the Sheet (beginner friendly)
 tests/                     Node tests: Code.gs against a fake Sheet + Playwright end-to-end
-android/                   Android app (Kotlin WebView shell) that bundles the web files above
+android/                   Android project: app/ = phone app (Kotlin WebView shell bundling the web files above),
+                           wear/ = Pixel Watch app (Kotlin + Compose for Wear OS; see docs/WATCH_APP.md)
 .github/workflows/android.yml  GitHub Actions: builds the APK on push, publishes a Release
 docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
 ```
@@ -73,6 +74,18 @@ docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
   make a new private key and keep it in GitHub Secrets.
 - Versions: AGP 8.7.3, Kotlin 2.1.0, Gradle 8.11.1 (wrapper), compileSdk/targetSdk 35, minSdk 26. No Compose, no AppCompat.
 - The Android build can't run in sandboxes that block Google's Maven. Check the GitHub Actions run instead.
+
+## Watch app (android/wear)
+
+- Native Compose for Wear OS, not the web app. `Repo.kt` re-implements the timer rules from `js/timers.js`
+  (start/resume pauses the running one, finish → one log row per segment ≥1 min, relocate splits a segment).
+  **If you change timer rules, change both.**
+- It talks to the Sheet directly (`summary` to read, `apply` to write) with an offline queue in SharedPreferences.
+- It gets the Sheet URL/key from the phone app over the Wear Data Layer (`/ff-config`). That only works because
+  both APKs have applicationId `au.ff.tracker` and the same signing key.
+- UI: VerticalPager (page 0 = now, then one page per task), crown flips pages; edit/finish/location are
+  ScalingLazyColumns with crown scrolling (`crownScroll` modifier). Swipe right to go back (SwipeDismissableNavHost).
+- Versions: Compose BOM 2024.12.01, Wear Compose 1.4.0, Kotlin 2.1.0 compose plugin, minSdk 30.
 
 ## Data model
 

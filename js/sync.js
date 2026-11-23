@@ -119,17 +119,28 @@ FF.sync = (() => {
     }
   }
 
+  /** In the Android app: pass the Sheet link to the Pixel Watch app (it can't be typed on a watch). */
+  function shareWithWatch() {
+    if (!window.FFAndroid || !window.FFAndroid.shareConfig) return;
+    const s = S.settings();
+    try {
+      window.FFAndroid.shareConfig(configured() ? s.url : '', configured() ? s.key : '');
+    } catch (e) { /* no watch */ }
+  }
+
   /** First connection from this device: send what's here, then load what's there. */
   async function connect(url, key) {
     await test(url, key);
     S.setSettings({ url, key, connected: true });
     S.queueEverything();
+    shareWithWatch();
     await pull();
   }
 
   function disconnect() {
     S.setSettings({ connected: false });
     setState('local');
+    shareWithWatch();
   }
 
   function schedule() {
@@ -141,6 +152,7 @@ FF.sync = (() => {
 
   /** Called once when the app opens: catch up, and refresh when you come back to the tab. */
   function start() {
+    shareWithWatch();
     if (configured()) pull().catch(() => {});
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible' || !configured()) return;

@@ -637,11 +637,18 @@ async function main() {
 
   await step('inside the Android app: files save through the app, back button closes pop-ups', async () => {
     const ctx = await browser.newContext({ viewport: { width: 412, height: 915 } });
+    await ctx.route('https://script.google.com/**', async (route) => {
+      const req = route.request();
+      const out = req.method() === 'POST' ? gas.call.post(req.postData()) : gas.call.get(Object.fromEntries(new URL(req.url()).searchParams));
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(out) });
+    });
     await ctx.addInitScript(() => {
       window.__saved = [];
+      window.__shared = [];
       window.FFAndroid = {
         saveFile: (name, type, text) => { window.__saved.push({ name, type, text }); return true; },
         appVersion: () => '1.0.7',
+        shareConfig: (url, key) => window.__shared.push([url, key]),
       };
     });
     const p = await ctx.newPage();
@@ -649,6 +656,17 @@ async function main() {
     p.on('pageerror', (e) => errs.push(e.message));
     await logList(p);
     assert.strictEqual(await p.evaluate(() => document.documentElement.classList.contains('in-app')), true);
+    // not connected yet: the watch is told there's no Sheet
+    assert.deepStrictEqual(await p.evaluate(() => window.__shared[0]), ['', '']);
+    // connecting hands the Sheet link to the watch
+    await p.goto(base + '#settings');
+    await p.fill('#s-url', SHEET_URL);
+    await p.fill('#s-key', KEY);
+    await p.click('form[data-form="sync-connect"] button[type=submit]');
+    await p.waitForSelector('[data-action="sync-now"]');
+    assert.deepStrictEqual(await p.evaluate(() => window.__shared[window.__shared.length - 1]), [SHEET_URL, KEY]);
+    assert.ok(await p.$('a[href$="FF-Tracker-Watch.apk"]'), 'watch app download offered');
+    await logList(p);
     await p.click('[data-action="log-csv"]');
     const saved = await p.evaluate(() => window.__saved);
     assert.strictEqual(saved.length, 1);
