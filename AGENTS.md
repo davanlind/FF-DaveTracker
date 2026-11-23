@@ -26,7 +26,8 @@ js/store.js                FF.store: data in localStorage + change queue; FF.mod
 js/sync.js                 FF.sync: talks to the Apps Script web app (Google Sheet)
 js/timers.js               FF.timers: open tasks (one running, others on hold), pause/resume/switch, finish → log rows
 js/colors.js               FF.colors: a colour per task name (auto from a validated palette, or user-picked), picker pop-up
-js/charts.js               FF.charts: "Logged today" clock ring (12h, outer AM / inner PM) + bars per task (SVG/HTML strings)
+js/charts.js               FF.charts: one day's timeline bar, clock ring (12h, outer AM / inner PM), bars per task and per location
+js/picks.js                FF.picks: pins (tasks/locations), most-used/recent lists, type-or-pick "chips" form field
 js/ui.js                   FF.ui: modal, confirm, toast, shared forms (log entry form, plan item form)
 js/views/*.js              one file per screen: today, plan, review, log, tasks, settings
 js/app.js                  router (#today, #plan…), click/submit/change wiring, timer tick
@@ -82,9 +83,10 @@ Five tables. The same names are used in the browser (`FF.store.all('log')`) and 
 | `tasks` | Tasks | `id, name, category, targetMinutes, active, notes` |
 | `plans` | Plans | `id, start` (a Monday), `end` (inclusive), `weeks` (1 or 2), `notes` |
 | `planItems` | Plan Items | `id, planId, planStart, taskId` ('' for one-off), `task` (name), `type` ('Repeatable'/'One-off'), `targetMinutes, day` ('' = any day), `done, notes` |
-| `log` | Log | `id, date, start, end, minutes, hours, task, type, worked` ('Solo'/'With help'), `helpers, notes, planId, planItemId, taskId` |
+| `log` | Log | `id, date, start, end, minutes, hours, task, location, type, worked` ('Solo'/'With help'), `helpers, notes, planId, planItemId, taskId` |
+| `pins` | Pinned | `id` (= `pin:<kind>:` + lower-case name), `kind` ('task'/'location'), `name` |
 | `colors` | Colours | `id` (= `color:` + lower-case task name), `name, color` (#rrggbb), `auto` (true if picked automatically) |
-| `active` | Active timers | `id, task, type, taskId, planItemId, planId, segments` (array of `{start, end}` ISO times; `end` '' = running). Stored as JSON text in the Sheet (kind `json`). |
+| `active` | Active timers | `id, task, type, taskId, planItemId, planId, segments` (array of `{start, end, location}`; ISO times; `end` '' = running). Stored as JSON text in the Sheet (kind `json`). |
 
 Every record also has `updatedAt`. IDs are strings made by `FF.util.uid(prefix)`.
 Task names are **copied** onto plan items and log entries on purpose, so the Sheet is readable and old entries survive a task being deleted.
@@ -125,6 +127,16 @@ SCREENSHOTS=1 npm run test:e2e     # also saves screenshots to tests/screenshots
 - Colour follows the task **name** (not its rank), assigned the first time a task appears and then saved (synced).
 - `FF.charts.dayRing` draws log entries plus open timer segments (faded). Arcs are split at midday onto the AM/PM rings.
   Today re-renders once a minute (`tick()` in app.js) so the "now" hand moves, but not while a pop-up or input is in use.
+
+## Locations, pins, day history
+
+- Location is free text, on each log row and each timer segment. The device's current location
+  (`settings.currentLocation`, not synced, set from Today's 📍 button) is given to new segments; changing it while a task runs
+  splits the segment (`FF.timers.relocateRunning`) so time is credited to the right place.
+- Pick lists: pinned first, then most used (count in recent log), then recent. Pins sync via the `pins` table.
+- Log tab has two modes: Day by day (default; `dayView()` in `js/views/log.js`, uses `FF.charts.dayCharts`) and List.
+  `FF.views.log.showDay(date)` / `data-action="open-day" data-date="…"` jumps to a day from anywhere.
+- Inputs whose value is driven by state should carry `data-nokeep` so a re-render doesn't restore the old value.
 
 ## Conventions
 
