@@ -46,6 +46,7 @@ p { margin: 0.5rem 0; line-height: 1.45; }
 /* ---------- view-only mode ---------- */
 .viewer-banner { background: #e9eef6; color: #23406b; text-align: center; padding: 8px 12px; font-size: 0.88rem; border-bottom: 1px solid #d3deee; }
 .share-out { margin-top: 14px; }
+.tip-box { background: #eef5ef; border: 1px solid #d5e8da; color: #24432d; border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; margin: 8px 0 12px; }
 .share-out input { font-size: 14px; color: var(--muted); }
 /* everything that changes data is hidden for viewers (the Sheet would refuse it anyway) */
 .viewer .start-card, .viewer .timer .btn-row, .viewer .on-hold .icon-btn, .viewer .item-row .icon-btn.play,

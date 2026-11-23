@@ -87,6 +87,12 @@ docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
   ScalingLazyColumns with crown scrolling (`crownScroll` modifier). Swipe right to go back (SwipeDismissableNavHost).
 - Versions: Compose BOM 2024.12.01, Wear Compose 1.4.0, Kotlin 2.1.0 compose plugin, minSdk 30.
 
+## Setup links (connect another device)
+
+- `#connect=<base64url JSON {u, k}>` (made by `FF.viewer.makeConnectLink`, Settings → Connect another device) connects a
+  browser with the **main** key via `FF.sync.connect`. The Settings URL box also accepts a pasted setup link.
+  The hash is cleared straight away so the password doesn't stay in the address bar.
+
 ## View-only links
 
 - `VIEW_KEY` in Code.gs is a second password: `checkKey_` returns role `'view'` for it on GET (ping/all/summary) and

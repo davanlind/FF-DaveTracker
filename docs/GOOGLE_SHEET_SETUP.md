@@ -58,8 +58,11 @@ A **secret key** (a password you make up) stops anyone else from using that addr
 2. Paste the **Web app URL** and type your **Secret key**.
 3. Tap **Connect**. The button at the top should turn green and say **Saved to Sheet**.
 
-Anything you'd already logged is sent to the Sheet at this point. Do steps 5.1–5.3 on each
-device you use (phone, work computer…) with the same URL and key.
+Anything you'd already logged is sent to the Sheet at this point.
+
+**Other devices (copy and paste):** on the connected device go to **Settings → Connect another
+device → Copy setup link**, send it to yourself, and open it on the other device (paste it into the
+browser's address bar). It connects in one go. Or type the same URL and key there.
 
 ---
 

@@ -1,5 +1,9 @@
-/* F&F Tracker — view-only links.
+/* F&F Tracker — links that set up another device.
  *
+ * Setup link (#connect=<code>): connects another browser/phone to YOUR Sheet with your main
+ * password, so it can see and change everything. Made in Settings → Connect another device.
+ *
+ * View-only link (#view=<code>):
  * The owner makes a link in Settings → "Share a view-only link". It looks like
  *   https://davanlind.github.io/FF-DaveTracker/#view=<code>
  * where <code> holds the Sheet web app URL, the script's VIEW_KEY and the owner's name.
@@ -24,10 +28,69 @@ FF.viewer = (() => {
     return JSON.parse(decodeURIComponent(escape(atob(b64))));
   };
 
-  /** The link to send someone. */
+  const siteBase = () => (FF.isApp || !/^https?:/.test(location.protocol) ? SITE_URL : location.origin + location.pathname);
+
+  /** The view-only link to send someone. */
   function makeLink(url, viewKey, name) {
-    const base = FF.isApp || !/^https?:/.test(location.protocol) ? SITE_URL : location.origin + location.pathname;
-    return `${base}#view=${encode({ u: url, k: viewKey, n: name || '' })}`;
+    return `${siteBase()}#view=${encode({ u: url, k: viewKey, n: name || '' })}`;
+  }
+
+  /** A setup link for your own other devices (includes your main password). */
+  function makeConnectLink(url, key) {
+    return `${siteBase()}#connect=${encode({ u: url, k: key })}`;
+  }
+
+  /** Pull { u, k } out of a setup link (or null). */
+  function readConnectLink(text) {
+    const m = String(text || '').match(/#connect=([A-Za-z0-9_-]+)/);
+    if (!m) return null;
+    try {
+      const info = decode(m[1]);
+      return info.u && info.k ? info : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Opened a setup link: connect this device to that Sheet. */
+  async function connectFromHash() {
+    const info = readConnectLink(location.hash);
+    history.replaceState(null, '', '#today');
+    if (!info) {
+      FF.ui.toast("That setup link isn't complete. Copy it again.", 'error');
+      FF.app.render();
+      return false;
+    }
+    const s = S.settings();
+    if (s.connected && s.role !== 'view' && s.url === info.u && s.key === info.k) {
+      FF.app.render();
+      FF.ui.toast('Already connected', 'ok');
+      return true;
+    }
+    if (s.connected) {
+      const ok = await FF.ui.confirm(
+        'Connect to this tracker?',
+        s.role === 'view'
+          ? 'This browser is showing a view-only copy of someone\'s tracker. Connecting replaces it with your own.'
+          : 'This browser is connected to a different Sheet. Connecting switches it to the one in this link.',
+        'Connect'
+      );
+      if (!ok) {
+        FF.app.render();
+        return false;
+      }
+      S.resetAll();
+    }
+    FF.app.render();
+    try {
+      await FF.sync.connect(info.u, info.k);
+      FF.ui.toast('Connected. Your tracking is here now.', 'ok');
+      FF.app.render();
+      return true;
+    } catch (e) {
+      FF.ui.toast(e.message, 'error');
+      return false;
+    }
   }
 
   /** Opened a #view= link: switch this browser to a read-only copy of the owner's tracker. */
@@ -108,5 +171,8 @@ FF.viewer = (() => {
   const ALLOWED_CHANGES = new Set(['log-range', 'review-plan', 'log-day']);
   const ALLOWED_FORMS = new Set(['sync-connect']);
 
-  return { isOn, ownerName, makeLink, openFromHash, stop, copy, encode, decode, ALLOWED_ACTIONS, ALLOWED_CHANGES, ALLOWED_FORMS };
+  return {
+    isOn, ownerName, makeLink, makeConnectLink, readConnectLink, connectFromHash, openFromHash, stop, copy, encode, decode,
+    ALLOWED_ACTIONS, ALLOWED_CHANGES, ALLOWED_FORMS,
+  };
 })();

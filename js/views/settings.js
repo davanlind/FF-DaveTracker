@@ -26,6 +26,19 @@ FF.views.settings = (() => {
       </section>`;
   }
 
+  function connectCard() {
+    return `
+      <section class="card">
+        <div class="card-head"><h3>Connect another device</h3></div>
+        <p class="muted">Copy this setup link and open it on your computer or another phone (paste it into the browser's address bar, or into the first box in that device's Settings). It connects that device to your Sheet in one go.</p>
+        <div class="btn-row wrap">
+          <button class="btn primary" data-action="connect-copy">⧉ Copy setup link</button>
+          ${navigator.share ? '<button class="btn ghost" data-action="connect-send">Send to myself…</button>' : ''}
+        </div>
+        <p class="hint">⚠️ This link includes your main password, so whoever has it can change your tracker. Only send it to yourself (e.g. email it to yourself). For other people, use a view-only link below.</p>
+      </section>`;
+  }
+
   function shareCard() {
     const s = S.settings();
     return `
@@ -75,15 +88,16 @@ FF.views.settings = (() => {
           : `<p>Right now your data is only saved in this browser. Connect a Google Sheet to keep an ongoing record and use the tracker on your phone and computer.</p>
              <p class="muted small">You need to do the one-off setup first. Follow <a href="https://github.com/davanlind/FF-DaveTracker/blob/main/docs/GOOGLE_SHEET_SETUP.md" target="_blank" rel="noopener">the Google Sheet setup guide</a>.</p>
              <form data-form="sync-connect" autocomplete="off">
-               <div class="field"><label for="s-url">Web app URL</label>
-                 <input id="s-url" name="url" value="${esc(s.url)}" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" required></div>
-               <div class="field"><label for="s-key">Secret key</label>
-                 <input id="s-key" name="key" value="${esc(s.key)}" placeholder="The SECRET_KEY you set in the script" required></div>
+               <div class="tip-box">📋 <b>Easiest:</b> on a device that's already connected, go to Settings → <b>Connect another device</b> → Copy setup link, then paste it here into the first box (or straight into this browser's address bar).</div>
+               <div class="field"><label for="s-url">Web app URL <span class="muted">or setup link</span></label>
+                 <input id="s-url" name="url" value="${esc(s.url)}" placeholder="https://script.google.com/macros/s/…/exec" inputmode="url" required data-input="setup-paste"></div>
+               <div class="field" id="s-key-field"><label for="s-key">Secret key</label>
+                 <input id="s-key" name="key" value="${esc(s.key)}" placeholder="The SECRET_KEY you set in the script"></div>
                <button class="btn primary" type="submit">Connect</button>
              </form>`}
       </section>
 
-      ${connected ? shareCard() : ''}
+      ${connected ? connectCard() + shareCard() : ''}
 
       <section class="card">
         <div class="card-head"><h3>Backup</h3></div>
@@ -117,9 +131,26 @@ FF.views.settings = (() => {
       </section>`;
   }
 
+  // pasting a setup link fills in both boxes
+  FF.inputs = FF.inputs || {};
+  FF.inputs['setup-paste'] = (el) => {
+    const info = FF.viewer.readConnectLink(el.value);
+    const keyBox = document.getElementById('s-key-field');
+    if (keyBox) keyBox.hidden = !!info;
+  };
+
   FF.forms['sync-connect'] = async (form) => {
-    const url = form.elements.url.value.trim();
-    const key = form.elements.key.value.trim();
+    let url = form.elements.url.value.trim();
+    let key = form.elements.key.value.trim();
+    const fromLink = FF.viewer.readConnectLink(url);
+    if (fromLink) {
+      url = fromLink.u;
+      key = fromLink.k;
+    }
+    if (!key) {
+      FF.ui.toast('Type your secret key (the SECRET_KEY from the script)', 'error');
+      return;
+    }
     if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
       FF.ui.toast('That URL should start with https://script.google.com/ and end with /exec', 'error');
       return;
@@ -157,6 +188,20 @@ FF.views.settings = (() => {
       btn.disabled = false;
       btn.textContent = 'Make link';
     }
+  };
+
+  FF.actions['connect-copy'] = async () => {
+    const s = S.settings();
+    const link = FF.viewer.makeConnectLink(s.url, s.key);
+    const ok = await FF.viewer.copy(link);
+    if (ok) FF.ui.toast('Setup link copied. Paste it on your other device.', 'ok');
+    else {
+      FF.ui.modal({ title: 'Setup link', body: `<p class="muted">Press and hold to copy:</p><textarea rows="4" readonly>${esc(link)}</textarea>`, cancelLabel: 'Close' });
+    }
+  };
+  FF.actions['connect-send'] = () => {
+    const s = S.settings();
+    navigator.share({ title: 'F&F Tracker setup link', text: 'Open this on my other device to connect F&F Tracker', url: FF.viewer.makeConnectLink(s.url, s.key) }).catch(() => {});
   };
 
   FF.actions['share-copy'] = async () => {

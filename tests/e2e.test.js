@@ -609,6 +609,40 @@ async function main() {
     await a.evaluate(() => FF.store.remove('active', FF.timers.onHold()[0].id));
   });
 
+  await step('setup link: copy on one device, paste on another, connected in one go', async () => {
+    await a.goto(base + '#settings');
+    await a.click('[data-action="connect-copy"]');
+    await a.waitForTimeout(200);
+    const copiedOrShown = (await a.textContent('#toast')).includes('Setup link copied') || (await a.evaluate(() => document.getElementById('modal').open));
+    assert.ok(copiedOrShown, 'link copied (or shown to copy by hand)');
+    await a.evaluate(() => document.getElementById('modal').open && document.getElementById('modal').close());
+    const link = await a.evaluate(() => FF.viewer.makeConnectLink(FF.store.settings().url, FF.store.settings().key));
+    const hash = link.slice(link.indexOf('#'));
+    const ownerCount = gas.call.get({ action: 'all', key: KEY }).data.log.length;
+    const open = async (fn) => {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Australia/Melbourne' });
+      await ctx.route('https://script.google.com/**', async (route) => {
+        const req = route.request();
+        const out = req.method() === 'POST' ? gas.call.post(req.postData()) : gas.call.get(Object.fromEntries(new URL(req.url()).searchParams));
+        await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(out) });
+      });
+      const p = await ctx.newPage();
+      await fn(p);
+      await p.waitForFunction((n) => FF.store.all('log').length === n && FF.store.settings().role === 'edit', ownerCount, { timeout: 6000 });
+      assert.ok(!(await p.evaluate(() => location.hash)).includes('connect='), 'password not left in the address bar');
+      await ctx.close();
+    };
+    // 1) open the link in the address bar
+    await open(async (p) => p.goto(base + hash));
+    // 2) paste it into the first box in Settings
+    await open(async (p) => {
+      await p.goto(base + '#settings');
+      await p.fill('#s-url', link);
+      assert.strictEqual(await p.isVisible('#s-key'), false, 'key box hides: the link has it');
+      await p.click('form[data-form="sync-connect"] button[type=submit]');
+    });
+  });
+
   await step('share a view-only link: they see everything, change nothing', async () => {
     await a.goto(base + '#settings');
     // the main password is refused for sharing

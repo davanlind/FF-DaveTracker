@@ -131,6 +131,10 @@ FF.app = (() => {
         FF.viewer.openFromHash();
         return;
       }
+      if (/^#connect=/.test(location.hash)) {
+        FF.viewer.connectFromHash();
+        return;
+      }
       render();
       window.scrollTo(0, 0);
     });
@@ -155,8 +159,10 @@ FF.app = (() => {
     if (FF.isApp) document.documentElement.classList.add('in-app');
     wire();
     const viaLink = /^#view=/.test(location.hash); // opened a view-only link
+    const setupLink = /^#connect=/.test(location.hash); // opened a setup link
     render();
     if (viaLink) FF.viewer.openFromHash();
+    if (setupLink) FF.viewer.connectFromHash();
     FF.sync.start();
   }
 
