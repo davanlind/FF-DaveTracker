@@ -7,6 +7,7 @@
  *   log        time actually worked (one row per stint of work)
  *   active     tasks currently being timed or on hold (see js/timers.js)
  *   colors     the colour chosen for each task name (see js/colors.js)
+ *   pins       tasks and locations pinned to the top of pick lists (see js/picks.js)
  *
  * Every change is saved to localStorage straight away AND added to a "queue".
  * FF.sync sends the queue to the Google Sheet when a connection is set up,
@@ -19,8 +20,8 @@ FF.store = (() => {
     settings: 'ff.settings.v1',
     oldTimer: 'ff.timer.v1', // v1.0 single timer; moved into 'active' on load
   };
-  const TABLES = ['tasks', 'plans', 'planItems', 'log', 'active', 'colors'];
-  const PREFIX = { tasks: 'task', plans: 'plan', planItems: 'item', log: 'log', active: 'act', colors: 'color' };
+  const TABLES = ['tasks', 'plans', 'planItems', 'log', 'active', 'colors', 'pins'];
+  const PREFIX = { tasks: 'task', plans: 'plan', planItems: 'item', log: 'log', active: 'act', colors: 'color', pins: 'pin' };
 
   const load = (k, fallback) => {
     try {
@@ -38,7 +39,7 @@ FF.store = (() => {
     }
   };
 
-  const emptyData = () => ({ tasks: [], plans: [], planItems: [], log: [], active: [], colors: [] });
+  const emptyData = () => ({ tasks: [], plans: [], planItems: [], log: [], active: [], colors: [], pins: [] });
 
   let data = Object.assign(emptyData(), load(KEYS.data, {}));
   let queue = load(KEYS.queue, []);
@@ -83,17 +84,20 @@ FF.store = (() => {
       return {
         id: str(r.id), task: str(r.task), type: str(r.type) || (r.taskId ? 'Repeatable' : 'One-off'),
         taskId: str(r.taskId), planItemId: str(r.planItemId), planId: str(r.planId),
-        segments: (Array.isArray(segs) ? segs : []).map((g) => ({ start: str(g.start), end: str(g.end) })).filter((g) => g.start),
+        segments: (Array.isArray(segs) ? segs : []).map((g) => ({ start: str(g.start), end: str(g.end), location: str(g.location) })).filter((g) => g.start),
         updatedAt: str(r.updatedAt),
       };
     },
+    pins: (r) => ({
+      id: str(r.id), kind: str(r.kind), name: str(r.name), updatedAt: str(r.updatedAt),
+    }),
     colors: (r) => ({
       id: str(r.id), name: str(r.name), color: str(r.color).toLowerCase(),
       auto: bool(r.auto), updatedAt: str(r.updatedAt),
     }),
     log: (r) => ({
       id: str(r.id), date: str(r.date), start: str(r.start), end: str(r.end),
-      minutes: num(r.minutes), hours: num(r.hours), task: str(r.task),
+      minutes: num(r.minutes), hours: num(r.hours), task: str(r.task), location: str(r.location),
       type: str(r.type) || (r.taskId ? 'Repeatable' : 'One-off'),
       worked: str(r.worked) || 'Solo', helpers: str(r.helpers), notes: str(r.notes),
       planId: str(r.planId), planItemId: str(r.planItemId), taskId: str(r.taskId),
@@ -218,6 +222,7 @@ FF.store = (() => {
     pendingCount, queueSnapshot, ackQueue, queueEverything, replaceAll,
     importBackup, exportBackup,
     settings: getSettings, setSettings,
+    currentLocation: () => settings.currentLocation || '',
     subscribe, emit,
   };
 })();

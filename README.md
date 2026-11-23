@@ -4,7 +4,8 @@ A simple website for tracking work time against targets.
 
 - **Time your work** with a timer, or log time afterwards. Keep **several tasks open**: pause one, jump to another, come back later.
 - **Repeatable tasks** (things you do often, each with a usual target time) and **one-off tasks**.
-- Record whether you worked **solo or had help**, and who helped.
+- Record whether you worked **solo or had help**, who helped, and **where** (location).
+- **📌 Pin** your most-used tasks and locations so they're always at the top.
 - **Plan a week or fortnight ahead**, always starting on a Monday, with a target time for each task.
 - **Review** each plan: target vs actual, what was finished on target, what ran over, and unplanned work.
 - Saves to an **ongoing Google Sheet**, so every device sees the same data. It also works offline and catches up later.
@@ -43,10 +44,10 @@ works, but data is only saved in that one browser.
 
 | Screen | What it's for |
 |---|---|
-| **Today** | **Type** what you're doing, or tap a planned, repeatable or recently used task to start it. **Pause** it, or **jump to another**. Whatever was running goes **on hold** until you resume (▶) or finish (■) it. Quick-start anything planned. **Logged today** shows a clock chart of when you worked on what (outer ring AM, inner ring PM) and a bar per task. Tap a colour to change it. |
+| **Today** | **Type** what you're doing, or tap a planned, repeatable or recently used task to start it. **Pause** it, or **jump to another**. Whatever was running goes **on hold** until you resume (▶) or finish (■) it. Quick-start anything planned. **Logged today** shows a timeline bar of the working day, a clock chart of when you worked on what (outer ring AM, inner ring PM) and a bar per task. Tap a colour to change it. |
 | **Plan** | Pick a week, tap *Plan this week* or *Plan a fortnight*, then add tasks with target times. *Add all repeatable tasks* fills in your usual list in one go; *copy the plan from…* reuses last period's plan. Tick tasks when they're finished. |
 | **Review** | For any plan: total target vs actual, each task's status (*Hit target*, *Over by…*, *In progress*, *Not started*), time per day, solo vs help, and unplanned work. |
-| **Log** | Every entry, by week/month. Tap one to fix it. *Download CSV* for a spreadsheet file. |
+| **Log** | **Day by day:** step back through past days (‹ ›, or pick a date) with the timeline, clock and totals for each. **List:** every entry by week/month; *Download CSV* for a spreadsheet file. Tap any entry to fix it. |
 | **Tasks** | Your list of repeatable tasks, each with a category and usual target time. |
 
 **Hit target** = the task is ticked as finished and the time logged against it was no more than its target.

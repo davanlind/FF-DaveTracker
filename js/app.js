@@ -31,7 +31,7 @@ FF.app = (() => {
 
     Object.entries(kept).forEach(([id, v]) => {
       const el = document.getElementById(id);
-      if (!el || !root.contains(el) || el.dataset.change === 'log-range' || el.dataset.change === 'review-plan') return;
+      if (!el || !root.contains(el) || el.hasAttribute('data-nokeep') || el.dataset.change === 'log-range' || el.dataset.change === 'review-plan') return;
       if (el.type === 'checkbox') return; // checkboxes always show saved state
       if (el.tagName === 'SELECT' && ![...el.options].some((o) => o.value === v)) return;
       el.value = v;

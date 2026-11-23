@@ -90,7 +90,7 @@ FF.views.review = (() => {
       <section class="card">
         <div class="card-head"><h3>Each day</h3><span class="small">${U.fmtMins(U.sum(perDay, (x) => x.mins))} total</span></div>
         <ul class="day-bars">
-          ${perDay.map((x) => `<li><span class="day-label">${esc(U.fmtDate(x.d, { weekday: 'short', day: 'numeric' }))}</span><span class="day-bar"><span style="width:${(x.mins / maxDay) * 100}%"></span></span><span class="day-val">${x.mins ? U.fmtMins(x.mins) : '–'}</span></li>`).join('')}
+          ${perDay.map((x) => `<li><button class="as-btn day-label day-link" data-action="open-day" data-date="${esc(x.d)}">${esc(U.fmtDate(x.d, { weekday: 'short', day: 'numeric' }))}</button><span class="day-bar"><span style="width:${(x.mins / maxDay) * 100}%"></span></span><span class="day-val">${x.mins ? U.fmtMins(x.mins) : '–'}</span></li>`).join('')}
         </ul>
         <p class="muted small">Solo ${U.fmtMins(split.solo)} · With help ${U.fmtMins(split.help)}</p>
       </section>

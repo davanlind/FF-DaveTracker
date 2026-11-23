@@ -1,4 +1,9 @@
-/* F&F Tracker — charts for one day (shown under "Logged today").
+/* F&F Tracker — charts for one day (Today's "Logged today" and the Log tab's Day view).
+ *
+ *  dayCharts(date) – everything below together; tapping a part of the timeline or the clock
+ *                    highlights that stretch in both and shows what it was.
+ *  dayTimeline(date) – one long bar from the first thing logged to the end of the last,
+ *                    split into coloured stretches (gaps = breaks / nothing logged).
  *
  *  dayRing(date) – a 12-hour clock face. Outer ring = morning (AM), inner ring = afternoon
  *                  and evening (PM). Each coloured arc is a stretch of work at that time of day.
@@ -23,7 +28,7 @@ FF.charts = (() => {
       .forEach((e) => {
         const start = U.toMins(e.start);
         const end = Math.min(1440, start + (Number(e.minutes) || 0));
-        out.push({ name: e.task, start, end, open: false, label: `${e.task} · ${e.start}–${e.end} · ${U.fmtMins(e.minutes)}` });
+        out.push({ name: e.task, location: e.location, start, end, open: false, label: `${e.task} · ${e.start}–${e.end} · ${U.fmtMins(e.minutes)}${e.location ? ` · 📍 ${e.location}` : ''}` });
       });
     const dayStart = U.parseYmd(date).getTime();
     const dayEnd = dayStart + 86400000;
@@ -36,8 +41,8 @@ FF.charts = (() => {
         const start = (a - dayStart) / 60000;
         const end = (b - dayStart) / 60000;
         out.push({
-          name: r.task, start, end, open: true,
-          label: `${r.task} · ${U.fromMins(start)}–${g.end ? U.fromMins(end) : 'now'} · ${U.fmtMins(end - start)} (${g.end ? 'on hold, not saved yet' : 'running'})`,
+          name: r.task, location: g.location || '', start, end, open: true,
+          label: `${r.task} · ${U.fromMins(start)}–${g.end ? U.fromMins(end) : 'now'} · ${U.fmtMins(end - start)}${g.location ? ` · 📍 ${g.location}` : ''} (${g.end ? 'on hold, not saved yet' : 'running'})`,
         });
       })
     );
@@ -132,9 +137,96 @@ FF.charts = (() => {
         <svg viewBox="0 0 340 340" role="img" aria-label="${esc(summary)}">${svg}</svg>
         <figcaption>
           <div class="ring-key"><span><i class="key-ring outer"></i>Outer ring: AM</span><span><i class="key-ring inner"></i>Inner ring: PM</span>${open ? '<span><i class="key-ring faded"></i>Faded: still on a timer</span>' : ''}</div>
-          <div class="ring-info" id="ringInfo" aria-live="polite">${all.length ? 'Tap a coloured part of the clock to see what it was.' : 'Nothing yet. Start a task and it will fill in around the clock.'}</div>
         </figcaption>
       </figure>`;
+  }
+
+  /* ---------- timeline: the working day as one bar ---------- */
+  const hourLabel = (m) => {
+    const h = Math.floor(m / 60) % 24;
+    return `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'am' : 'pm'}`;
+  };
+
+  /** Minutes covered by at least one piece (overlaps counted once). */
+  function coveredMinutes(all) {
+    const spans = all.map((p) => [p.start, p.end]).sort((a, b) => a[0] - b[0]);
+    let total = 0;
+    let cur = null;
+    spans.forEach(([s, e]) => {
+      if (!cur || s > cur[1]) {
+        if (cur) total += cur[1] - cur[0];
+        cur = [s, e];
+      } else cur[1] = Math.max(cur[1], e);
+    });
+    if (cur) total += cur[1] - cur[0];
+    return total;
+  }
+
+  function dayTimeline(date) {
+    const all = pieces(date);
+    if (!all.length) return '';
+    FF.colors.ensure(all.map((p) => p.name));
+    const first = Math.min(...all.map((p) => p.start));
+    const lastEnd = Math.max(...all.map((p) => p.end));
+    const span = Math.max(lastEnd - first, 1);
+    const pct = (m) => ((m - first) / span) * 100;
+    const segs = all
+      .map((p, i) => {
+        const left = pct(p.start);
+        const width = Math.max(pct(p.end) - left, 0.8);
+        return `<span class="tl-seg${p.open ? ' open' : ''}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;background:${esc(FF.colors.colorFor(p.name))}"
+          data-action="chart-pick" data-info="${esc(p.label)}" data-i="${i}" title="${esc(p.label)}"></span>`;
+      })
+      .join('');
+    const step = span <= 6 * 60 ? 60 : span <= 12 * 60 ? 120 : 180;
+    let ticks = '';
+    for (let m = Math.ceil(first / step) * step; m < lastEnd; m += step) {
+      const x = pct(m);
+      if (x < 7 || x > 93) continue; // keep clear of the start/end labels
+      ticks += `<span class="tl-tick" style="left:${x.toFixed(2)}%">${hourLabel(m)}</span>`;
+    }
+    const worked = coveredMinutes(all);
+    const gaps = span - worked;
+    return `
+      <div class="timeline" role="img" aria-label="${esc(`Day from ${U.fromMins(first)} to ${U.fromMins(lastEnd)}: ${all.map((p) => p.label).join('; ')}`)}">
+        <div class="tl-ends"><span>First <b>${U.fromMins(first)}</b></span><span>Last <b>${U.fromMins(lastEnd)}</b></span></div>
+        <div class="tl-bar">${segs}</div>
+        <div class="tl-ticks">${ticks}</div>
+        <div class="tl-sum">${U.fmtMins(span)} day · ${U.fmtMins(worked)} on tasks${gaps >= 1 ? ` · ${U.fmtMins(gaps)} gaps` : ''}</div>
+      </div>`;
+  }
+
+  /* ---------- time by location ---------- */
+  function dayLocations(date) {
+    const all = pieces(date);
+    if (!all.some((p) => p.location)) return '';
+    const by = new Map();
+    all.forEach((p) => {
+      const k = p.location || 'No location';
+      by.set(k, (by.get(k) || 0) + (p.end - p.start));
+    });
+    const rows = [...by.entries()].sort((a, b) => b[1] - a[1]);
+    const max = Math.max(...rows.map((r) => r[1]), 1);
+    return `
+      <div class="task-bars-head"><h4>Time by location</h4></div>
+      <ul class="loc-bars">${rows
+        .map(([name, mins]) => `
+          <li><span class="tb-name">📍 ${esc(name)}</span><span class="tb-val">${esc(U.fmtMins(mins))}</span>
+            <span class="tb-track"><span class="tb-fill loc" style="width:${((mins / max) * 100).toFixed(2)}%"></span></span></li>`)
+        .join('')}</ul>`;
+  }
+
+  /** Timeline, clock, bars and locations for one day, linked together. */
+  function dayCharts(date) {
+    const any = pieces(date).length > 0;
+    return `
+      <div class="day-charts">
+        ${dayTimeline(date)}
+        <div class="chart-info" aria-live="polite">${any ? 'Tap a coloured part of the timeline or clock to see what it was.' : date === U.today() ? 'Nothing yet. Start a task and it will fill in here.' : 'Nothing was logged on this day.'}</div>
+        ${dayRing(date)}
+        ${dayBars(date)}
+        ${dayLocations(date)}
+      </div>`;
   }
 
   /* ---------- bars: time per task ---------- */
@@ -166,21 +258,21 @@ FF.charts = (() => {
   }
 
   FF.actions['chart-pick'] = (el) => {
-    const info = document.getElementById('ringInfo');
-    if (info) info.textContent = el.dataset.info;
-    const fig = el.closest('.day-ring');
+    const wrap = el.closest('.day-charts') || document;
+    const info = wrap.querySelector('.chart-info');
     const again = el.classList.contains('picked');
-    document.querySelectorAll('.ring-arc.picked').forEach((n) => n.classList.remove('picked'));
+    wrap.querySelectorAll('.picked').forEach((n) => n.classList.remove('picked'));
     if (again) {
       // tap the same part again to clear
-      if (fig) fig.classList.remove('has-pick');
-      if (info) info.textContent = 'Tap a coloured part of the clock to see what it was.';
+      if (wrap.classList) wrap.classList.remove('has-pick');
+      if (info) info.textContent = 'Tap a coloured part of the timeline or clock to see what it was.';
       return;
     }
-    if (fig) fig.classList.add('has-pick');
-    document.querySelectorAll(`.ring-arc[data-i="${el.dataset.i}"]`).forEach((n) => n.classList.add('picked'));
+    if (info) info.textContent = el.dataset.info;
+    if (wrap.classList) wrap.classList.add('has-pick');
+    wrap.querySelectorAll(`[data-action="chart-pick"][data-i="${el.dataset.i}"]`).forEach((n) => n.classList.add('picked'));
   };
   FF.actions['color-pick'] = (el) => FF.colors.picker(el.dataset.name);
 
-  return { pieces, dayRing, dayBars };
+  return { pieces, dayRing, dayBars, dayTimeline, dayLocations, dayCharts };
 })();

@@ -3,7 +3,8 @@
  * You can have several tasks open at once. At most ONE is running; the others are
  * "on hold". Each open task is a record in the 'active' table (synced to the Sheet's
  * "Active timers" tab) with a list of time segments:
- *   segments: [{ start: ISO time, end: ISO time or '' while running }, ...]
+ *   segments: [{ start: ISO time, end: ISO time or '' while running, location }, ...]
+ * New segments take the device's current location (Today → 📍), unless the choice says otherwise.
  *
  * Starting or resuming a task pauses whatever was running (that's how you "switch").
  * Finishing a task turns each segment into its own Log row, so the Sheet shows the
@@ -56,7 +57,7 @@ FF.timers = (() => {
     const rec = S.upsert('active', {
       task: choice.task, type: choice.type, taskId: choice.taskId || '',
       planItemId: choice.planItemId || '', planId: choice.planId || '',
-      segments: [{ start: nowIso(), end: '' }],
+      segments: [{ start: nowIso(), end: '', location: choice.location != null ? choice.location : S.currentLocation() }],
     });
     return { rec, paused };
   }
@@ -67,13 +68,32 @@ FF.timers = (() => {
     if (isRunning(r)) return { rec: r, already: true };
     const paused = pauseRunning();
     const fresh = S.get('active', id);
-    const rec = S.upsert('active', { ...fresh, segments: [...fresh.segments, { start: nowIso(), end: '' }] });
+    const rec = S.upsert('active', { ...fresh, segments: [...fresh.segments, { start: nowIso(), end: '', location: S.currentLocation() }] });
     return { rec, paused, resumed: true };
   }
 
   function pause(id) {
     const r = S.get('active', id);
     if (isRunning(r)) pauseRunning({ silent: false });
+  }
+
+  /**
+   * You moved somewhere else while a task is running: time so far stays at the old place,
+   * time from now on counts at the new one. (A segment under a minute is just relabelled.)
+   */
+  function relocateRunning(location) {
+    const r = running();
+    if (!r) return;
+    const g = last(r);
+    if (g.location === location) return;
+    if (Date.now() - new Date(g.start).getTime() < 60000) {
+      S.upsert('active', { ...r, segments: r.segments.map((x, i) => (i === r.segments.length - 1 ? { ...x, location } : x)) });
+      return;
+    }
+    const now = nowIso();
+    const segments = r.segments.map((x, i) => (i === r.segments.length - 1 ? { ...x, end: now } : x));
+    segments.push({ start: now, end: '', location });
+    S.upsert('active', { ...r, segments });
   }
 
   /** Move the start of the current segment (forgot to press start). Returns an error message or ''. */
@@ -99,7 +119,7 @@ FF.timers = (() => {
       const a = new Date(g.start);
       const b = g.end ? new Date(g.end) : new Date(now);
       const minutes = Math.round((b - a) / 60000);
-      return { date: U.ymd(a), start: U.hm(a), end: U.fromMins(U.toMins(U.hm(a)) + minutes), minutes };
+      return { date: U.ymd(a), start: U.hm(a), end: U.fromMins(U.toMins(U.hm(a)) + minutes), minutes, location: g.location || '' };
     });
     const kept = rows.filter((e) => e.minutes >= 1);
     if (kept.length) return kept;
@@ -107,5 +127,5 @@ FF.timers = (() => {
     return [{ ...first, minutes: 1, end: U.fromMins(U.toMins(first.start) + 1) }];
   }
 
-  return { list, running, onHold, isRunning, elapsedMs, start, resume, pause, setCurrentStart, toEntries, last };
+  return { list, running, onHold, isRunning, elapsedMs, start, resume, pause, relocateRunning, setCurrentStart, toEntries, last };
 })();

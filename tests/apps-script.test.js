@@ -38,7 +38,7 @@ test('upsert creates tabs with headers and rows; read returns the same values', 
   const { call, ss } = loadScript();
   const entry = {
     id: 'log_1', date: '2026-11-23', start: '09:05', end: '10:35', minutes: 90, hours: 1.5,
-    task: 'Showroom store run', type: 'Repeatable', worked: 'With help', helpers: 'Sam',
+    task: 'Showroom store run', location: 'Warehouse', type: 'Repeatable', worked: 'With help', helpers: 'Sam',
     notes: 'Van loaded, 2 drops', planId: 'plan_1', planItemId: 'item_1', taskId: 'task_1', updatedAt: '2026-11-23T00:00:00.000Z',
   };
   const r = call.post({ key: 'test-key', action: 'apply', ops: [{ op: 'upsert', table: 'log', record: entry }] });
@@ -51,7 +51,7 @@ test('upsert creates tabs with headers and rows; read returns the same values', 
   const all = call.get({ action: 'all', key: 'test-key' });
   assert.strictEqual(all.ok, true);
   assert.deepStrictEqual(all.data.log[0], entry);
-  assert.deepStrictEqual(Object.keys(all.data).sort(), ['active', 'colors', 'log', 'planItems', 'plans', 'tasks']);
+  assert.deepStrictEqual(Object.keys(all.data).sort(), ['active', 'colors', 'log', 'pins', 'planItems', 'plans', 'tasks']);
 });
 
 test('upsert of the same id updates in place; delete removes the row', () => {

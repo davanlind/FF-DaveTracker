@@ -66,6 +66,13 @@ async function main() {
     return page;
   }
 
+  // the Log tab opens day by day; some checks need the list
+  const logList = async (pg) => {
+    await pg.goto(base + '#log');
+    await pg.waitForSelector('.mode-switch');
+    if (await pg.$('[data-action="log-mode"][data-mode="list"]:not(.on)')) await pg.click('[data-action="log-mode"][data-mode="list"]');
+  };
+
   const steps = [];
   const step = async (label, fn) => {
     await fn();
@@ -198,9 +205,21 @@ async function main() {
     // the same colour shows next to the entry in the list
     const dot = await a.$eval('.entries .dot', (e) => getComputedStyle(e).backgroundColor);
     assert.ok(colours.includes(dot));
-    // tap an arc to see what it was
+    // timeline bar: one section per stretch, from first to last
+    const pieces = await a.evaluate(() => FF.charts.pieces(FF.util.today()));
+    assert.strictEqual(await a.$$eval('.tl-seg', (els) => els.length), pieces.length);
+    const first = await a.evaluate(() => { const p = FF.charts.pieces(FF.util.today()); return FF.util.fromMins(Math.min(...p.map((x) => x.start))); });
+    assert.match(await a.textContent('.tl-ends'), new RegExp(`First ${first}`));
+    // tap an arc to see what it was; the same stretch lights up on the timeline too
     await a.click('.ring-arc >> nth=0', { force: true });
-    assert.match(await a.textContent('#ringInfo'), /·/);
+    assert.match(await a.textContent('.chart-info'), /·/);
+    const i = await a.getAttribute('.ring-arc.picked', 'data-i');
+    assert.strictEqual(await a.$$eval(`.tl-seg.picked[data-i="${i}"]`, (e) => e.length), 1);
+    await a.click('.tl-seg >> nth=1', { force: true });
+    assert.strictEqual(await a.getAttribute('.tl-seg.picked', 'data-i'), '1');
+    assert.ok((await a.$$eval('.ring-arc.picked[data-i="1"]', (e) => e.length)) >= 1, 'same stretch on the clock');
+    await a.click('.tl-seg >> nth=1', { force: true });
+    assert.strictEqual(await a.$$eval('.picked', (e) => e.length), 0, 'tap again to clear');
     // hand for "now" is drawn
     assert.strictEqual(await a.$$eval('.ring-hand', (e) => e.length), 1);
     await a.shot('13-logged-today-charts');
@@ -243,7 +262,7 @@ async function main() {
   });
 
   await step('change the date and times of a logged entry', async () => {
-    await a.click('a[href="#log"]');
+    await logList(a);
     await a.waitForSelector('.entry');
     const id = await a.evaluate(() => FF.store.all('log').find((e) => e.task === 'Unload surprise delivery').id);
     const yesterday = await a.evaluate(() => FF.util.addDays(FF.util.today(), -1));
@@ -269,12 +288,12 @@ async function main() {
   });
 
   await step('log screen lists entries and builds a CSV', async () => {
-    await a.click('a[href="#log"]');
+    await logList(a);
     await a.waitForSelector('.entry');
     assert.strictEqual(await a.$$eval('.entry', (els) => els.length), 3);
     const [dl] = await Promise.all([a.waitForEvent('download'), a.click('[data-action="log-csv"]')]);
     const csv = fs.readFileSync(await dl.path(), 'utf8');
-    assert.match(csv.split('\n')[0], /^Date,Start,End,Minutes,Hours,Task,Type,Worked,Helpers/);
+    assert.match(csv.split('\n')[0], /^Date,Start,End,Minutes,Hours,Task,Location,Type,Worked,Helpers/);
     assert.strictEqual(csv.trim().split('\n').length, 4);
     await a.shot('08-log');
   });
@@ -334,7 +353,7 @@ async function main() {
   });
 
   await step('delete an entry and it leaves the Sheet too', async () => {
-    await a.goto(base + '#log');
+    await logList(a);
     await a.selectOption('#logRange', 'all');
     const id = await a.evaluate(() => FF.store.all('log').find((e) => e.task === 'Supplier call').id);
     await a.click(`[data-action="entry-edit"][data-id="${id}"]`);
@@ -468,7 +487,111 @@ async function main() {
     assert.strictEqual(gas.call.get({ action: 'all', key: KEY }).data.active.length, 0);
   });
 
+  await step('locations: set where you are, change it mid-task, saved per stretch', async () => {
+    await a.goto(base + '#today');
+    await a.click('[data-action="location-choose"]');
+    await a.fill('#loc-search', 'Warehouse');
+    await a.press('#loc-search', 'Enter');
+    assert.strictEqual(await a.evaluate(() => FF.store.currentLocation()), 'Warehouse');
+    assert.match(await a.textContent('.loc-chip'), /Warehouse/);
+    await a.fill('#startTask', 'Pallet wrap');
+    await a.press('#startTask', 'Enter');
+    assert.match(await a.textContent('.timer-loc'), /Warehouse/);
+    // started 10 minutes ago at the warehouse...
+    await a.evaluate(() => {
+      const r = FF.timers.running();
+      FF.store.upsert('active', { ...r, segments: [{ ...r.segments[0], start: new Date(Date.now() - 10 * 60000).toISOString() }] });
+    });
+    // ...then moved to the showroom
+    await a.click('[data-action="location-choose"]');
+    await a.fill('#loc-search', 'Showroom');
+    await a.click('#loc-list .pick-main.new');
+    const segs = await a.evaluate(() => FF.timers.running().segments.map((g) => g.location));
+    assert.deepStrictEqual(segs, ['Warehouse', 'Showroom']);
+    await a.shot('15-location-running');
+    await a.evaluate(() => {
+      const r = FF.timers.running();
+      const ago = (m) => new Date(Date.now() - m * 60000).toISOString();
+      FF.store.upsert('active', { ...r, segments: [{ start: ago(30), end: ago(20), location: 'Warehouse' }, { start: ago(20), end: '', location: 'Showroom' }] });
+    });
+    await a.click('.timer.running [data-action="active-finish"]');
+    assert.match(await a.textContent('#modal .stints'), /Warehouse[\s\S]*Showroom/);
+    await a.click('#modal button[type=submit]');
+    const rows = await a.evaluate(() => FF.store.all('log').filter((e) => e.task === 'Pallet wrap').map((e) => [e.location, e.minutes]).sort());
+    assert.deepStrictEqual(rows, [['Showroom', 20], ['Warehouse', 10]]);
+    // the day charts break time down by location
+    assert.match(await a.textContent('.loc-bars'), /Warehouse[\s\S]*Showroom|Showroom[\s\S]*Warehouse/);
+  });
+
+  await step('pin a location and a task; they show first', async () => {
+    await a.click('[data-action="location-choose"]');
+    await a.click('#loc-list .pin-btn[data-name="Warehouse"]');
+    assert.strictEqual(await a.evaluate(() => FF.picks.isPinned('location', 'Warehouse')), true);
+    await a.fill('#loc-search', '');
+    await a.dispatchEvent('#loc-search', 'input');
+    assert.strictEqual(await a.textContent('#loc-list .suggest-group'), 'Pinned');
+    await a.click('#loc-list .pick-main[data-name="Warehouse"]');
+    // pin a task from the start list
+    await a.click('#startSuggest .pin-btn[data-name="Marketing photoshoot"]');
+    const firstGroup = await a.textContent('#startSuggest .suggest-group');
+    const firstTask = await a.textContent('#startSuggest .suggest-name');
+    assert.deepStrictEqual([firstGroup, firstTask], ['Pinned', 'Marketing photoshoot']);
+    // forms offer the pinned location as a chip
+    await a.click('[data-action="entry-new"]');
+    assert.strictEqual(await a.inputValue('#f-location'), 'Warehouse', 'new entries default to where you are');
+    await a.fill('#f-location', '');
+    await a.dispatchEvent('#f-location', 'input');
+    assert.match(await a.textContent('#modal .chips'), /📌 Warehouse/);
+    await a.click('#modal .chip[data-name="Showroom"]');
+    assert.strictEqual(await a.inputValue('#f-location'), 'Showroom');
+    await a.shot('16-entry-location');
+    await a.click('#modal [data-close].btn');
+    await a.waitForFunction(() => FF.store.pendingCount() === 0, null, { timeout: 5000 });
+    const sheet = gas.call.get({ action: 'all', key: KEY }).data;
+    assert.ok(sheet.pins.some((p) => p.kind === 'location' && p.name === 'Warehouse'));
+    assert.ok(sheet.pins.some((p) => p.kind === 'task' && p.name === 'Marketing photoshoot'));
+    assert.ok(sheet.log.some((e) => e.task === 'Pallet wrap' && e.location === 'Showroom'), 'location reaches the Sheet');
+  });
+
+  await step('go back through day history', async () => {
+    const old = await a.evaluate(() => {
+      const d = FF.util.addDays(FF.util.today(), -3);
+      FF.store.upsert('log', { date: d, start: '08:00', end: '09:30', minutes: 90, task: 'Warehouse stock check', type: 'One-off', worked: 'Solo', location: 'Warehouse' });
+      FF.store.upsert('log', { date: d, start: '10:00', end: '11:00', minutes: 60, task: 'Showroom store run', type: 'One-off', worked: 'Solo' });
+      return d;
+    });
+    await a.goto(base + '#log');
+    await a.click('[data-action="log-mode"][data-mode="day"]');
+    await a.waitForSelector('.day-nav');
+    assert.match(await a.textContent('.day-nav'), /Today/);
+    assert.ok(await a.$('.day-nav [data-action="day-step"][aria-label="Next day"][disabled]'), "can't go into the future");
+    await a.click('.day-nav [aria-label="Previous day"]');
+    assert.strictEqual(await a.inputValue('#logDay'), await a.evaluate(() => FF.util.addDays(FF.util.today(), -1)));
+    await a.click('[data-action="day-step"][title="Previous day with entries"]');
+    assert.strictEqual(await a.inputValue('#logDay'), old);
+    assert.strictEqual(await a.$$eval('.tl-seg', (e) => e.length), 2);
+    assert.match(await a.textContent('.tl-ends'), /First 08:00[\s\S]*Last 11:00/);
+    assert.match(await a.textContent('.tl-sum'), /3h day · 2h 30m on tasks · 30m gaps/);
+    assert.strictEqual(await a.$$eval('.entry', (e) => e.length), 2);
+    assert.strictEqual(await a.$$eval('.ring-hand', (e) => e.length), 0, 'no "now" hand on past days');
+    await a.shot('17-day-history');
+    // add an entry straight onto that day
+    await a.click('[data-action="entry-new-day"]');
+    assert.strictEqual(await a.inputValue('#f-date'), old);
+    await a.click('#modal [data-close].btn');
+    // the date box jumps anywhere
+    await a.fill('#logDay', await a.evaluate(() => FF.util.today()));
+    await a.dispatchEvent('#logDay', 'change');
+    assert.match(await a.textContent('.day-nav'), /Today/);
+    // Today's card links back here
+    await a.goto(base + '#today');
+    await a.click('[data-action="open-day"]');
+    await a.waitForSelector('.day-nav');
+    assert.strictEqual(await a.inputValue('#logDay'), await a.evaluate(() => FF.util.addDays(FF.util.today(), -1)));
+  });
+
   await step('a running task shows on the other device too', async () => {
+    await a.goto(base + '#today');
     await a.fill('#startTask', 'Stock count');
     await a.click('form[data-form="timer-start"] button[type=submit]');
     await a.waitForFunction(() => FF.store.pendingCount() === 0, null, { timeout: 5000 });
@@ -524,7 +647,7 @@ async function main() {
     const p = await ctx.newPage();
     const errs = [];
     p.on('pageerror', (e) => errs.push(e.message));
-    await p.goto(base + '#log');
+    await logList(p);
     assert.strictEqual(await p.evaluate(() => document.documentElement.classList.contains('in-app')), true);
     await p.click('[data-action="log-csv"]');
     const saved = await p.evaluate(() => window.__saved);

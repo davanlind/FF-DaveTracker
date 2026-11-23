@@ -206,6 +206,7 @@ FF.ui = (() => {
 
     const body = `
       ${taskBlock}
+      ${FF.picks.field({ name: 'location', label: 'Location <span class="muted">(optional)</span>', value: mode === 'new' ? S.currentLocation() : entry.location || '', kind: 'location', placeholder: 'e.g. Warehouse', id: 'f-location' })}
       <div class="field">
         <label for="f-date">Date</label>
         <input id="f-date" type="date" name="date" value="${esc(date)}" required>
@@ -310,6 +311,7 @@ FF.ui = (() => {
           ...entry,
           ...choice,
           date: f.date.value,
+          location: f.location.value.trim(),
           start: f.start.value,
           end,
           minutes,

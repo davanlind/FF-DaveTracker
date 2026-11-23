@@ -6,8 +6,8 @@
  * change SECRET_KEY below, then Deploy → New deployment → Web app.
  * Full steps: docs/GOOGLE_SHEET_SETUP.md
  *
- * It creates (and keeps up to date) six tabs:
- *   Log, Plan Items, Plans, Tasks, Active timers, Colours
+ * It creates (and keeps up to date) seven tabs:
+ *   Log, Plan Items, Plans, Tasks, Active timers, Colours, Pinned
  * Columns are matched by their HEADER NAME, so you can reorder columns,
  * and you can add your own extra columns (e.g. formulas) to the right.
  * Don't rename the existing headers or the ID column.
@@ -32,6 +32,7 @@ const SCHEMA = {
       ['minutes', 'Minutes', 'number', '0'],
       ['hours', 'Hours', 'number', '0.00'],
       ['task', 'Task', 'text'],
+      ['location', 'Location', 'text'],
       ['type', 'Type', 'text'],
       ['worked', 'Worked', 'text'],
       ['helpers', 'Helpers', 'text'],
@@ -81,6 +82,16 @@ const SCHEMA = {
       ['planId', 'Plan ID', 'text'],
       ['planItemId', 'Plan item ID', 'text'],
       ['taskId', 'Task ID', 'text'],
+      ['id', 'ID', 'text'],
+      ['updatedAt', 'Updated', 'text'],
+    ],
+  },
+  // Tasks and locations pinned to the top of pick lists.
+  pins: {
+    sheet: 'Pinned',
+    columns: [
+      ['kind', 'Kind', 'text'],
+      ['name', 'Name', 'text'],
       ['id', 'ID', 'text'],
       ['updatedAt', 'Updated', 'text'],
     ],

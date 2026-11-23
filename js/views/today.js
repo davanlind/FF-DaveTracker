@@ -23,6 +23,7 @@ FF.views.today = (() => {
       <section class="card timer running">
         <div class="eyebrow">Working on</div>
         <div class="timer-task">${esc(r.task)} ${r.type === 'One-off' ? '<span class="badge">One-off</span>' : ''}</div>
+        ${seg.location ? `<div class="timer-loc">📍 ${esc(seg.location)}</div>` : ''}
         <div class="clock" data-clock="${esc(r.id)}">${U.fmtClock(T.elapsedMs(r))}</div>
         <div class="muted small">${resumed ? 'Resumed' : 'Started'} ${U.hm(segStart)}${U.ymd(segStart) !== U.today() ? ` on ${esc(U.fmtDate(U.ymd(segStart)))}` : ''} · <button class="link-btn inline" data-action="active-adjust" data-id="${esc(r.id)}">change</button>${item ? ` · target ${U.fmtMins(item.targetMinutes)}, ${U.fmtMins(M.actualFor(item.id))} logged before` : ''}</div>
         <div class="btn-row two">
@@ -53,29 +54,47 @@ FF.views.today = (() => {
 
   /* ---------- "type or pick a task" box ---------- */
 
-  /** Everything you might want to start: planned items, repeatable tasks, recent one-offs. */
+  /**
+   * Everything you might want to start, in groups:
+   * Pinned, Planned, Most used, Your tasks (repeatable), Used recently (one-offs).
+   * value: "p:<planItemId>" | "t:<taskId>" | "o:<one-off name>"
+   */
   function taskSuggestions() {
+    const P = FF.picks;
     const date = U.today();
     const plan = M.planFor(date);
-    const out = [];
-    const seen = new Set();
-    const add = (value, label, sub, group) => {
-      const k = label.trim().toLowerCase();
-      if (seen.has(k)) return;
-      seen.add(k);
-      out.push({ value, label, sub, group });
+    const byName = new Map(); // lower-case name -> { value, sub }
+    const note = (name, value, sub) => {
+      const k = P.key(name);
+      if (k && !byName.has(k)) byName.set(k, { name, value, sub });
     };
     if (plan) {
       M.itemsFor(plan.id).filter((i) => !i.done).forEach((i) =>
-        add(`p:${i.id}`, i.task, `Planned · target ${U.fmtMins(i.targetMinutes)}${i.day === date ? ' · today' : ''}`, 'Planned'));
+        note(i.task, `p:${i.id}`, `Planned · target ${U.fmtMins(i.targetMinutes)}${i.day === date ? ' · today' : ''}`));
     }
-    M.activeTasks().forEach((t) => add(`t:${t.id}`, t.name, t.category || 'Repeatable task', 'Your tasks'));
-    const recent = S.all('log')
-      .filter((e) => e.type === 'One-off')
-      .sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
-    recent.forEach((e) => {
-      if (out.filter((x) => x.group === 'Used recently').length < 8) add(`o:${e.task}`, e.task, `One-off · last ${U.fmtDate(e.date, { day: 'numeric', month: 'short' })}`, 'Used recently');
-    });
+    M.activeTasks().forEach((t) => note(t.name, `t:${t.id}`, t.category || 'Repeatable task'));
+    const used = P.usage('task', 60);
+    used.forEach((u) => note(u.name, `o:${u.name}`, 'One-off'));
+
+    const out = [];
+    const seen = new Set();
+    const add = (name, group, sub) => {
+      const k = P.key(name);
+      if (!k || seen.has(k)) return;
+      seen.add(k);
+      const known = byName.get(k) || { value: `o:${name}`, sub: 'One-off' };
+      out.push({ value: known.value, label: known.name || name, sub: sub || known.sub, group });
+    };
+    P.pinned('task').forEach((p) => add(p.name, 'Pinned'));
+    if (plan) M.itemsFor(plan.id).filter((i) => !i.done).forEach((i) => add(i.task, 'Planned'));
+    used.filter((u) => u.count >= 2).slice(0, 5).forEach((u) => add(u.name, 'Most used', `${byName.get(P.key(u.name)).sub} · used ${u.count} times`));
+    M.activeTasks().forEach((t) => add(t.name, 'Your tasks'));
+    used
+      .slice()
+      .sort((x, y) => y.last.localeCompare(x.last))
+      .forEach((u) => {
+        if (out.filter((x) => x.group === 'Used recently').length < 8) add(u.name, 'Used recently', `${byName.get(P.key(u.name)).sub} · last ${U.fmtDate(u.last.slice(0, 10), { day: 'numeric', month: 'short' })}`);
+      });
     return out;
   }
 
@@ -83,23 +102,22 @@ FF.views.today = (() => {
     const q = text.trim().toLowerCase();
     const all = taskSuggestions();
     const item = (x) => `
-      <li><button type="button" class="suggest-item" data-action="start-suggest" data-value="${esc(x.value)}">
-        <span class="suggest-name">${esc(x.label)}</span><span class="suggest-sub">${esc(x.sub)}</span>
-        <span class="suggest-go">▶</span>
-      </button></li>`;
+      <li class="pick-row">
+        <button type="button" class="suggest-item" data-action="start-suggest" data-value="${esc(x.value)}">
+          <span class="suggest-name">${esc(x.label)}</span><span class="suggest-sub">${esc(x.sub)}</span>
+          <span class="suggest-go">▶</span>
+        </button>
+        ${FF.picks.pinButton('task', x.label)}
+      </li>`;
     if (!q) {
-      if (!all.length) return '<p class="hint">Type what you\'re doing and tap Start. Tasks you use show up here to tap next time.</p>';
+      if (!all.length) return '<p class="hint">Type what you\'re doing and tap Start. Tasks you use show up here to tap next time, and you can 📌 pin your favourites.</p>';
       const groups = U.groupBy(all, (x) => x.group);
       return [...groups.entries()].map(([g, list]) => `<div class="suggest-group">${esc(g)}</div><ul class="suggest">${list.map(item).join('')}</ul>`).join('');
     }
-    const words = q.split(/\s+/);
-    const hits = all
-      .filter((x) => words.every((w) => x.label.toLowerCase().includes(w)))
-      .sort((a, b) => b.label.toLowerCase().startsWith(q) - a.label.toLowerCase().startsWith(q))
-      .slice(0, 8);
+    const hits = FF.picks.filter(all.map((x) => ({ ...x, name: x.label })), text).slice(0, 8);
     const exact = all.some((x) => x.label.trim().toLowerCase() === q);
     return `<ul class="suggest">${hits.map(item).join('')}
-      ${exact ? '' : `<li><button type="button" class="suggest-item new" data-action="start-typed">
+      ${exact ? '' : `<li class="pick-row"><button type="button" class="suggest-item new" data-action="start-typed">
         <span class="suggest-name">Start “${esc(text.trim())}”</span><span class="suggest-sub">New one-off task</span><span class="suggest-go">▶</span>
       </button></li>`}</ul>`;
   }
@@ -109,7 +127,10 @@ FF.views.today = (() => {
     return `
       <section class="card timer start-card">
         <form data-form="timer-start" class="start-form" autocomplete="off">
-          <label for="startTask" class="eyebrow">${busy ? 'Jump to another task' : 'Start a task'}</label>
+          <div class="start-head">
+            <label for="startTask" class="eyebrow">${busy ? 'Jump to another task' : 'Start a task'}</label>
+            <button type="button" class="loc-chip ${S.currentLocation() ? '' : 'empty'}" data-action="location-choose">📍 ${esc(S.currentLocation() || 'Set location')}</button>
+          </div>
           <div class="picker-row">
             <input id="startTask" name="task" placeholder="Type a task, or pick one below" autocomplete="off" autocapitalize="sentences" enterkeyhint="go" data-input="start-filter">
             <button class="btn primary" type="submit">▶ Start</button>
@@ -178,9 +199,9 @@ FF.views.today = (() => {
           <h3>Logged today</h3>
           <span class="small strong">${U.fmtMins(total)}</span>
         </div>
-        ${FF.charts.dayRing(date)}
-        ${FF.charts.dayBars(date)}
-        ${entries.length ? `<h4 class="entries-head">Entries</h4>${FF.views.log.entryList(entries)}` : '<p class="muted">Nothing logged yet today.</p>'}
+        ${FF.charts.dayCharts(date)}
+        ${entries.length ? `<h4 class="entries-head">Entries</h4>${FF.views.log.entryList(entries)}` : ''}
+        <button class="link-btn" data-action="open-day" data-date="${esc(U.addDays(date, -1))}">← Look back at earlier days</button>
       </section>`;
   }
 
@@ -282,6 +303,7 @@ FF.views.today = (() => {
     const item = r.planItemId ? S.get('planItems', r.planItemId) : null;
     const total = U.sum(rows, (e) => e.minutes);
     const worked = S.settings().lastWorked || 'Solo';
+    const sameLoc = rows.every((e) => e.location === rows[0].location);
     FF.ui.modal({
       title: 'Save this time',
       cancelLabel: 'Not yet',
@@ -290,9 +312,10 @@ FF.views.today = (() => {
         <div class="field"><span class="label">Task</span><div class="readonly">${esc(r.task)}</div></div>
         <div class="field">
           <span class="label">You worked on it ${rows.length} times · ${U.fmtMins(total)} in total</span>
-          <ul class="stints">${rows.map((e) => `<li><span>${esc(U.fmtDate(e.date, { weekday: 'short', day: 'numeric', month: 'short' }))}</span><span>${esc(e.start)}–${esc(e.end)}</span><b>${U.fmtMins(e.minutes)}</b></li>`).join('')}</ul>
+          <ul class="stints">${rows.map((e) => `<li><span>${esc(U.fmtDate(e.date, { weekday: 'short', day: 'numeric', month: 'short' }))}${!sameLoc && e.location ? `<br><span class="muted small">📍 ${esc(e.location)}</span>` : ''}</span><span>${esc(e.start)}–${esc(e.end)}</span><b>${U.fmtMins(e.minutes)}</b></li>`).join('')}</ul>
           <p class="hint">Each one is saved as its own row. You can change any of them later in the Log.</p>
         </div>
+        ${sameLoc ? FF.picks.field({ name: 'location', label: 'Location <span class="muted">(optional)</span>', value: rows[0].location, kind: 'location', placeholder: 'e.g. Warehouse', id: 'fm-location' }) : ''}
         ${FF.ui.workedField(worked, '')}
         ${item ? `<div class="field"><label class="check"><input type="checkbox" name="done" ${item.done ? 'checked' : ''}><span>This planned task is now <b>finished</b></span></label>
           <div class="hint">Counts towards: ${esc(item.task)} (target ${U.fmtMins(item.targetMinutes)})</div></div>` : ''}
@@ -312,7 +335,7 @@ FF.views.today = (() => {
         const f = form.elements;
         const w = f.worked.value || 'Solo';
         const helpers = w === 'With help' ? f.helpers.value.trim() : '';
-        rows.forEach((e) => S.upsert('log', { ...base, ...e, worked: w, helpers, notes: f.notes.value.trim() }, { silent: true }));
+        rows.forEach((e) => S.upsert('log', { ...base, ...e, ...(sameLoc ? { location: f.location.value.trim() } : {}), worked: w, helpers, notes: f.notes.value.trim() }, { silent: true }));
         if (item && f.done && item.done !== f.done.checked) S.upsert('planItems', { ...item, done: f.done.checked }, { silent: true });
         S.setSettings({ lastWorked: w });
         S.remove('active', r.id);
@@ -346,6 +369,40 @@ FF.views.today = (() => {
         FF.ui.toast(`Timer now started at ${f.time.value}`, 'ok');
       },
     });
+  };
+
+  /** "Where are you?" — sets this device's current location for new timers. */
+  FF.actions['location-choose'] = () => {
+    const running = T.running();
+    const current = S.currentLocation();
+    let typed = '';
+    const choose = (name) => {
+      const loc = String(name || '').trim();
+      S.setSettings({ currentLocation: loc });
+      const also = document.querySelector('#modal input[name=alsoRunning]');
+      if (running && (!also || also.checked)) T.relocateRunning(loc);
+      S.emit();
+      document.getElementById('modal').close();
+      FF.ui.toast(loc ? `Location: ${loc}` : 'Location cleared', 'ok');
+    };
+    FF.actions['location-set'] = (el) => choose(el.dataset.name);
+    FF.ui.modal({
+      title: 'Where are you?',
+      body: `
+        <div class="field"><input id="loc-search" placeholder="Type a place, or pick one below" autocomplete="off" autocapitalize="words" data-input="loc-search" enterkeyhint="done"></div>
+        <div id="loc-list" class="suggest-box tall">${FF.picks.pinList('location', '', { action: 'location-set', actionLabel: 'Use' })}</div>
+        ${running ? `<label class="check"><input type="checkbox" name="alsoRunning" checked><span>Also for <b>${esc(running.task)}</b> from now on</span></label>` : ''}
+        <p class="hint">New tasks you start on this device get this location. Tap 📌 to keep a place at the top.</p>`,
+      submitLabel: 'Done',
+      extraButtons: current ? [{ label: 'No location', cls: 'ghost', onClick: () => choose('') }] : [],
+      onSubmit: () => {
+        if (typed.trim()) choose(typed);
+      },
+    });
+    FF.inputs['loc-search'] = (el) => {
+      typed = el.value;
+      document.getElementById('loc-list').innerHTML = FF.picks.pinList('location', el.value, { action: 'location-set', actionLabel: 'Use' });
+    };
   };
 
   FF.actions['entry-new'] = () => FF.ui.entryForm({ mode: 'new' });
