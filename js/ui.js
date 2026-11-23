@@ -178,7 +178,7 @@ FF.ui = (() => {
   /* ---------- log entry form (used by timer stop, add entry, edit entry) ---------- */
   /**
    * entryForm({ entry, mode })
-   *   mode 'stop' – finishing the running timer (task already chosen)
+   *   mode 'stop' – finishing a timed task (entry.activeId = the open task in FF.timers)
    *   mode 'new'  – logging time by hand
    *   mode 'edit' – changing an existing log entry
    */
@@ -245,7 +245,7 @@ FF.ui = (() => {
         onClick: async () => {
           const ok = await confirm('Throw away this timer?', 'The time will not be logged.', 'Discard');
           if (!ok) return false;
-          S.setTimer(null);
+          if (entry.activeId) S.remove('active', entry.activeId);
           toast('Timer discarded');
         },
       });
@@ -256,7 +256,7 @@ FF.ui = (() => {
       body,
       submitLabel: isStop ? 'Save' : mode === 'edit' ? 'Save changes' : 'Add entry',
       extraButtons: extra,
-      cancelLabel: isStop ? 'Keep timing' : 'Cancel',
+      cancelLabel: isStop ? 'Not yet' : 'Cancel',
       onOpen: (form) => {
         wireWorked(form);
         const f = form.elements;
@@ -322,7 +322,7 @@ FF.ui = (() => {
           if (item && item.done !== f.done.checked) S.upsert('planItems', { ...item, done: f.done.checked });
         }
         S.setSettings({ lastWorked: worked });
-        if (isStop) S.setTimer(null);
+        if (isStop && entry.activeId) S.remove('active', entry.activeId);
         toast(isStop ? `Logged ${U.fmtMins(minutes)} on ${choice.task}` : mode === 'edit' ? 'Entry updated' : 'Entry added', 'ok');
       },
     });

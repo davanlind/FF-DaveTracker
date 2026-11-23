@@ -54,13 +54,17 @@ FF.app = (() => {
 
   /** Update running clocks every second without re-drawing the screen. */
   function tick() {
-    document.querySelectorAll('[data-elapsed]').forEach((el) => {
-      el.textContent = FF.util.fmtClock(Date.now() - new Date(el.dataset.elapsed).getTime());
+    document.querySelectorAll('.clock[data-clock]').forEach((el) => {
+      const r = S.get('active', el.dataset.clock);
+      if (r) el.textContent = FF.util.fmtClock(FF.timers.elapsedMs(r));
     });
-    const t = S.timer();
+    const r = FF.timers.running();
+    const held = FF.timers.onHold().length;
     const badge = document.getElementById('timerBadge');
-    badge.hidden = !t;
-    if (t) badge.textContent = FF.util.fmtClock(Date.now() - new Date(t.startedAt).getTime()).replace(/:\d\d$/, '');
+    badge.hidden = !r && !held;
+    badge.classList.toggle('paused', !r);
+    if (r) badge.textContent = FF.util.fmtClock(FF.timers.elapsedMs(r)).replace(/:\d\d$/, '') + (held ? ` +${held}` : '');
+    else if (held) badge.textContent = `${held} on hold`;
   }
 
   function wire() {

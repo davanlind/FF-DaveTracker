@@ -118,21 +118,21 @@ async function main() {
     await a.shot('03-plan');
   });
 
-  await step('timer: start a planned task, stop it, mark had help + finished', async () => {
+  await step('timer: start a planned task, finish it, mark had help + finished', async () => {
     await a.click('a[href="#today"]');
     const id = await a.evaluate(() => FF.store.all('planItems').find((i) => i.task === 'Showroom store run').id);
     await a.click(`[data-action="timer-start-item"][data-id="${id}"]`);
     await a.waitForSelector('.timer.running');
     // pretend it started 80 minutes ago
     await a.evaluate(() => {
-      const t = FF.store.timer();
-      FF.store.setTimer({ ...t, startedAt: new Date(Date.now() - 80 * 60000).toISOString() });
+      const r = FF.timers.running();
+      FF.store.upsert('active', { ...r, segments: [{ start: new Date(Date.now() - 80 * 60000).toISOString(), end: '' }] });
     });
     await a.waitForTimeout(1100);
     const clock = await a.textContent('.clock');
     assert.match(clock, /^1:2\d:\d\d$/);
     await a.shot('04-timer-running');
-    await a.click('[data-action="timer-stop"]');
+    await a.click('.timer.running [data-action="active-finish"]');
     await a.check('#modal input[name=worked][value="With help"]', { force: true });
     await a.fill('#f-helpers', 'Sam');
     await a.check('#modal input[name=done]');
@@ -146,7 +146,7 @@ async function main() {
     assert.strictEqual(e.helpers, 'Sam');
     assert.strictEqual(e.planItemId, id);
     assert.strictEqual(await a.evaluate((i) => FF.store.get('planItems', i).done, id), true);
-    assert.strictEqual(await a.evaluate(() => FF.store.timer()), null);
+    assert.strictEqual(await a.evaluate(() => FF.store.all('active').length), 0);
   });
 
   await step('log a one-off by hand, typing "1.5h" as the duration', async () => {
@@ -307,16 +307,15 @@ async function main() {
     await a.selectOption('#startPick', '__oneoff');
     await a.fill('#startOneOff', 'Late start');
     await a.click('form[data-form="timer-start"] button[type=submit]');
-    await a.click('[data-action="timer-adjust"]');
-    const earlier = await a.evaluate(() => FF.util.fromMins(FF.util.toMins(FF.util.nowHm()) - 30));
-    const onDate = await a.evaluate(() => { const d = new Date(Date.now() - 30 * 60000); return FF.util.ymd(d); });
-    await a.fill('#ta-date', onDate);
-    await a.fill('#ta-time', earlier);
+    await a.click('[data-action="active-adjust"]');
+    const when = await a.evaluate(() => { const d = new Date(Date.now() - 30 * 60000); return [FF.util.ymd(d), FF.util.hm(d)]; });
+    await a.fill('#ta-date', when[0]);
+    await a.fill('#ta-time', when[1]);
     await a.click('#modal button[type=submit]');
-    const mins = await a.evaluate(() => (Date.now() - new Date(FF.store.timer().startedAt).getTime()) / 60000);
+    const mins = await a.evaluate(() => FF.timers.elapsedMs(FF.timers.running()) / 60000);
     assert.ok(mins >= 29 && mins < 32, `timer moved back ~30 min (got ${mins})`);
     // future times are refused
-    await a.click('[data-action="timer-adjust"]');
+    await a.click('[data-action="active-adjust"]');
     await a.fill('#ta-date', await a.evaluate(() => FF.util.today()));
     await a.fill('#ta-time', '23:59');
     await a.click('#modal button[type=submit]');
@@ -324,7 +323,79 @@ async function main() {
       assert.match(await a.textContent('#modal .field-error'), /future/);
     }
     await a.evaluate(() => document.getElementById('modal').open && document.getElementById('modal').close());
-    await a.evaluate(() => FF.store.setTimer(null));
+    await a.evaluate(() => FF.store.remove('active', FF.timers.running().id));
+  });
+
+  await step('switch between several tasks: pause, resume, finish with two stints', async () => {
+    await a.goto(base + '#today');
+    const startOneOff = async (name) => {
+      await a.selectOption('#startPick', '__oneoff');
+      await a.fill('#startOneOff', name);
+      await a.click('form[data-form="timer-start"] button[type=submit]');
+    };
+    await startOneOff('Picking - Replen');
+    await startOneOff('Urgent delivery');
+    let st = await a.evaluate(() => ({ run: FF.timers.running().task, held: FF.timers.onHold().map((r) => r.task) }));
+    assert.deepStrictEqual(st, { run: 'Urgent delivery', held: ['Picking - Replen'] });
+    await a.waitForSelector('.on-hold');
+    assert.match(await a.textContent('#timerBadge'), /\+1$/);
+    assert.match(await a.textContent('label[for="startPick"]'), /Jump to another task/);
+    // starting the same one-off again resumes it rather than making a duplicate
+    await startOneOff('picking - replen');
+    st = await a.evaluate(() => ({ run: FF.timers.running().task, n: FF.store.all('active').length, segs: FF.timers.running().segments.length }));
+    assert.deepStrictEqual(st, { run: 'Picking - Replen', n: 2, segs: 2 });
+    // resume button on the held task switches back
+    const urgent = await a.evaluate(() => FF.store.all('active').find((r) => r.task === 'Urgent delivery').id);
+    await a.click(`.on-hold [data-action="active-resume"][data-id="${urgent}"]`);
+    assert.strictEqual(await a.evaluate(() => FF.timers.running().task), 'Urgent delivery');
+    // pause: nothing running, both on hold
+    await a.click('.timer.running [data-action="active-pause"]');
+    assert.strictEqual(await a.evaluate(() => FF.timers.running()), null);
+    assert.match(await a.textContent('#timerBadge'), /2 on hold/);
+    // give the tasks realistic times, then finish them
+    await a.evaluate(() => {
+      const ago = (m) => new Date(Date.now() - m * 60000).toISOString();
+      const p = FF.store.all('active').find((r) => r.task === 'Picking - Replen');
+      const u = FF.store.all('active').find((r) => r.task === 'Urgent delivery');
+      FF.store.upsert('active', { ...p, segments: [{ start: ago(120), end: ago(80) }, { start: ago(30), end: ago(5) }] });
+      FF.store.upsert('active', { ...u, segments: [{ start: ago(80), end: ago(65) }] });
+    });
+    await a.shot('10-on-hold');
+    const pick = await a.evaluate(() => FF.store.all('active').find((r) => r.task === 'Picking - Replen').id);
+    await a.click(`.on-hold [data-action="active-finish"][data-id="${pick}"]`);
+    assert.strictEqual(await a.$$eval('#modal .stints li', (els) => els.length), 2);
+    await a.check('#modal input[name=worked][value="With help"]', { force: true });
+    await a.fill('#modal input[name=helpers]', 'Jo');
+    await a.fill('#fm-notes', 'Interrupted by delivery');
+    await a.shot('11-finish-two-stints');
+    await a.click('#modal button[type=submit]');
+    const rows = await a.evaluate(() => FF.store.all('log').filter((e) => e.task === 'Picking - Replen').map((e) => [e.minutes, e.worked, e.helpers, e.notes]).sort());
+    assert.deepStrictEqual(rows, [[25, 'With help', 'Jo', 'Interrupted by delivery'], [40, 'With help', 'Jo', 'Interrupted by delivery']]);
+    await a.click(`.on-hold [data-action="active-finish"][data-id="${urgent}"]`);
+    await a.click('#modal button[type=submit]');
+    assert.strictEqual(await a.evaluate(() => FF.store.all('log').find((e) => e.task === 'Urgent delivery').minutes), 15);
+    assert.strictEqual(await a.evaluate(() => FF.store.all('active').length), 0);
+    await a.waitForFunction(() => FF.store.pendingCount() === 0, null, { timeout: 5000 });
+    assert.strictEqual(gas.call.get({ action: 'all', key: KEY }).data.active.length, 0);
+  });
+
+  await step('a running task shows on the other device too', async () => {
+    await a.selectOption('#startPick', '__oneoff');
+    await a.fill('#startOneOff', 'Stock count');
+    await a.click('form[data-form="timer-start"] button[type=submit]');
+    await a.waitForFunction(() => FF.store.pendingCount() === 0, null, { timeout: 5000 });
+    await b.goto(base + '#settings');
+    await b.click('[data-action="sync-now"]');
+    await b.goto(base + '#today');
+    await b.waitForSelector('.timer.running');
+    assert.match(await b.textContent('.timer-task'), /Stock count/);
+    // pause it on the computer, phone sees it on hold after syncing
+    await b.click('.timer.running [data-action="active-pause"]');
+    await b.waitForFunction(() => FF.store.pendingCount() === 0, null, { timeout: 5000 });
+    await a.goto(base + '#settings');
+    await a.click('[data-action="sync-now"]');
+    await a.waitForFunction(() => !FF.timers.running() && FF.timers.onHold().length === 1, null, { timeout: 5000 });
+    await a.evaluate(() => FF.store.remove('active', FF.timers.onHold()[0].id));
   });
 
   await step('timer survives a page reload', async () => {
@@ -381,6 +452,22 @@ async function main() {
     assert.strictEqual(await p.$('section a.btn[href$="FF-Tracker.apk"]'), null, 'no download button inside the app');
     assert.match(await p.textContent('#view'), /Android app 1\.0\.7/);
     assert.deepStrictEqual(errs, []);
+    await ctx.close();
+  });
+
+  await step('a timer left running in version 1.0 carries over after updating', async () => {
+    const ctx = await browser.newContext();
+    const startedAt = new Date(Date.now() - 12 * 60000).toISOString();
+    await ctx.addInitScript((t) => {
+      if (!localStorage.getItem('ff.data.v1')) localStorage.setItem('ff.timer.v1', JSON.stringify({ task: 'Break', type: 'One-off', taskId: '', planItemId: '', planId: '', startedAt: t }));
+    }, startedAt);
+    const p = await ctx.newPage();
+    await p.goto(base + '#today');
+    await p.waitForSelector('.timer.running');
+    assert.match(await p.textContent('.timer-task'), /Break/);
+    assert.strictEqual(await p.evaluate(() => localStorage.getItem('ff.timer.v1')), null);
+    await p.reload();
+    assert.strictEqual(await p.evaluate(() => FF.store.all('active').length), 1, 'not duplicated on reload');
     await ctx.close();
   });
 

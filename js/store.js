@@ -1,10 +1,11 @@
 /* F&F Tracker — where the data lives in the browser.
  *
- * Four "tables" (same names as the Google Sheet tabs, see apps-script/Code.gs):
+ * Five "tables" (same names as the Google Sheet tabs, see apps-script/Code.gs):
  *   tasks      repeatable tasks you do often (with a default target time)
  *   plans      a week or fortnight, always starting on a Monday
  *   planItems  tasks planned inside a plan, each with a target time
  *   log        time actually worked (one row per stint of work)
+ *   active     tasks currently being timed or on hold (see js/timers.js)
  *
  * Every change is saved to localStorage straight away AND added to a "queue".
  * FF.sync sends the queue to the Google Sheet when a connection is set up,
@@ -15,10 +16,10 @@ FF.store = (() => {
     data: 'ff.data.v1',
     queue: 'ff.queue.v1',
     settings: 'ff.settings.v1',
-    timer: 'ff.timer.v1',
+    oldTimer: 'ff.timer.v1', // v1.0 single timer; moved into 'active' on load
   };
-  const TABLES = ['tasks', 'plans', 'planItems', 'log'];
-  const PREFIX = { tasks: 'task', plans: 'plan', planItems: 'item', log: 'log' };
+  const TABLES = ['tasks', 'plans', 'planItems', 'log', 'active'];
+  const PREFIX = { tasks: 'task', plans: 'plan', planItems: 'item', log: 'log', active: 'act' };
 
   const load = (k, fallback) => {
     try {
@@ -36,7 +37,7 @@ FF.store = (() => {
     }
   };
 
-  const emptyData = () => ({ tasks: [], plans: [], planItems: [], log: [] });
+  const emptyData = () => ({ tasks: [], plans: [], planItems: [], log: [], active: [] });
 
   let data = Object.assign(emptyData(), load(KEYS.data, {}));
   let queue = load(KEYS.queue, []);
@@ -44,7 +45,6 @@ FF.store = (() => {
     { url: '', key: '', lastSync: null, connected: false, lastWorked: 'Solo' },
     load(KEYS.settings, {})
   );
-  let timer = load(KEYS.timer, null);
 
   const listeners = new Set();
   const persist = () => {
@@ -74,6 +74,18 @@ FF.store = (() => {
       targetMinutes: num(r.targetMinutes), day: str(r.day), done: bool(r.done),
       notes: str(r.notes), updatedAt: str(r.updatedAt),
     }),
+    active: (r) => {
+      let segs = r.segments;
+      if (typeof segs === 'string') {
+        try { segs = JSON.parse(segs); } catch (e) { segs = []; }
+      }
+      return {
+        id: str(r.id), task: str(r.task), type: str(r.type) || (r.taskId ? 'Repeatable' : 'One-off'),
+        taskId: str(r.taskId), planItemId: str(r.planItemId), planId: str(r.planId),
+        segments: (Array.isArray(segs) ? segs : []).map((g) => ({ start: str(g.start), end: str(g.end) })).filter((g) => g.start),
+        updatedAt: str(r.updatedAt),
+      };
+    },
     log: (r) => ({
       id: str(r.id), date: str(r.date), start: str(r.start), end: str(r.end),
       minutes: num(r.minutes), hours: num(r.hours), task: str(r.task),
@@ -176,13 +188,20 @@ FF.store = (() => {
     emit('status');
   }
 
-  /* ---------- the running timer (kept on this device only) ---------- */
-  const getTimer = () => timer;
-  function setTimer(t) {
-    timer = t;
-    save(KEYS.timer, t);
-    emit();
-  }
+  /* ---------- moving a v1.0 running timer into the new 'active' table ---------- */
+  (function migrateOldTimer() {
+    const old = load(KEYS.oldTimer, null);
+    if (!old || !old.startedAt) return;
+    const rec = normalize.active({
+      id: FF.util.uid('act'), task: old.task, type: old.type, taskId: old.taskId,
+      planItemId: old.planItemId, planId: old.planId, segments: [{ start: old.startedAt, end: '' }],
+      updatedAt: new Date().toISOString(),
+    });
+    data.active.push(rec);
+    queue.push({ op: 'upsert', table: 'active', record: rec });
+    persist();
+    try { localStorage.removeItem(KEYS.oldTimer); } catch (e) { /* ignore */ }
+  })();
 
   const subscribe = (fn) => {
     listeners.add(fn);
@@ -194,7 +213,6 @@ FF.store = (() => {
     pendingCount, queueSnapshot, ackQueue, queueEverything, replaceAll,
     importBackup, exportBackup,
     settings: getSettings, setSettings,
-    timer: getTimer, setTimer,
     subscribe, emit,
   };
 })();

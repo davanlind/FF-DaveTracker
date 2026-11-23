@@ -24,6 +24,7 @@ css/styles.css             all styling (mobile first, CSS variables at the top)
 js/util.js                 FF.util: dates ('YYYY-MM-DD' strings), times ('HH:MM'), durations, escaping, CSV
 js/store.js                FF.store: data in localStorage + change queue; FF.model: questions about the data
 js/sync.js                 FF.sync: talks to the Apps Script web app (Google Sheet)
+js/timers.js               FF.timers: open tasks (one running, others on hold), pause/resume/switch, finish → log rows
 js/ui.js                   FF.ui: modal, confirm, toast, shared forms (log entry form, plan item form)
 js/views/*.js              one file per screen: today, plan, review, log, tasks, settings
 js/app.js                  router (#today, #plan…), click/submit/change wiring, timer tick
@@ -68,7 +69,7 @@ docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
 
 ## Data model
 
-Four tables. The same names are used in the browser (`FF.store.all('log')`) and as tabs in the Sheet.
+Five tables. The same names are used in the browser (`FF.store.all('log')`) and as tabs in the Sheet.
 
 | table | Sheet tab | key fields |
 |---|---|---|
@@ -76,6 +77,7 @@ Four tables. The same names are used in the browser (`FF.store.all('log')`) and 
 | `plans` | Plans | `id, start` (a Monday), `end` (inclusive), `weeks` (1 or 2), `notes` |
 | `planItems` | Plan Items | `id, planId, planStart, taskId` ('' for one-off), `task` (name), `type` ('Repeatable'/'One-off'), `targetMinutes, day` ('' = any day), `done, notes` |
 | `log` | Log | `id, date, start, end, minutes, hours, task, type, worked` ('Solo'/'With help'), `helpers, notes, planId, planItemId, taskId` |
+| `active` | Active timers | `id, task, type, taskId, planItemId, planId, segments` (array of `{start, end}` ISO times; `end` '' = running). Stored as JSON text in the Sheet (kind `json`). |
 
 Every record also has `updatedAt`. IDs are strings made by `FF.util.uid(prefix)`.
 Task names are **copied** onto plan items and log entries on purpose, so the Sheet is readable and old entries survive a task being deleted.
@@ -91,7 +93,10 @@ New Sheet columns are added automatically (matched by header name), but the user
 - Every `FF.store.upsert/remove` saves to localStorage and appends to a queue (`ff.queue.v1`).
 - `FF.sync.flush()` POSTs queued ops to the web app (debounced). `FF.sync.pull()` flushes, then GETs all tables and replaces local data, re-applying anything still queued.
 - POST bodies are sent as `text/plain` to avoid a CORS preflight, which Apps Script can't answer. Keep it that way.
-- The running timer is stored only on the device (`ff.timer.v1`) and is not synced.
+- Timers: several tasks can be open; at most one has a running segment. Starting/resuming one pauses the running one
+  (`FF.timers.start/resume`). Finishing turns **each segment** into its own `log` row (`FF.timers.toEntries`, stints under
+  1 minute are dropped) and deletes the `active` record. Open timers sync like any table. A v1.0 single timer
+  (`ff.timer.v1`) is migrated into `active` on load.
 - Last write wins; there's no conflict merging. Fine for one person on a few devices.
 
 ## Testing
@@ -114,5 +119,5 @@ SCREENSHOTS=1 npm run test:e2e     # also saves screenshots to tests/screenshots
 
 ## Ideas not built yet
 
-Pause/resume the timer · sync a running timer across devices (website ↔ app) · Android notification while a timer runs · edit plan notes · weekly summary tab in the Sheet ·
+Android notification while a timer runs · reminder if a timer has been running for hours · edit plan notes · weekly summary tab in the Sheet ·
 offline caching with a service worker (be careful: cached old versions confuse beginners) · charts over many weeks.

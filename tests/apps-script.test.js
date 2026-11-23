@@ -51,7 +51,7 @@ test('upsert creates tabs with headers and rows; read returns the same values', 
   const all = call.get({ action: 'all', key: 'test-key' });
   assert.strictEqual(all.ok, true);
   assert.deepStrictEqual(all.data.log[0], entry);
-  assert.deepStrictEqual(Object.keys(all.data).sort(), ['log', 'planItems', 'plans', 'tasks']);
+  assert.deepStrictEqual(Object.keys(all.data).sort(), ['active', 'log', 'planItems', 'plans', 'tasks']);
 });
 
 test('upsert of the same id updates in place; delete removes the row', () => {
@@ -98,6 +98,19 @@ test('adds rows past the end of the sheet', () => {
   const r = call.post({ key: 'test-key', action: 'apply', ops: [{ op: 'upsert', table: 'log', record: { id: 'log_9', minutes: 5 } }] });
   assert.strictEqual(r.ok, true, r.error);
   assert.strictEqual(call.get({ action: 'all', key: 'test-key' }).data.log.length, 2);
+});
+
+test('active timers keep their list of time segments', () => {
+  const { call, ss } = loadScript();
+  const rec = { id: 'act_1', task: 'Picking - Replen', type: 'One-off', taskId: '', planItemId: '', planId: '',
+    segments: [{ start: '2026-11-23T00:14:00.000Z', end: '2026-11-23T01:38:00.000Z' }, { start: '2026-11-23T02:00:00.000Z', end: '' }],
+    updatedAt: 'x' };
+  assert.strictEqual(call.post({ key: 'test-key', action: 'apply', ops: [{ op: 'upsert', table: 'active', record: rec }] }).ok, true);
+  assert.ok(ss.getSheetByName('Active timers'));
+  const back = call.get({ action: 'all', key: 'test-key' }).data.active[0];
+  assert.deepStrictEqual(back, rec);
+  call.post({ key: 'test-key', action: 'apply', ops: [{ op: 'delete', table: 'active', id: 'act_1' }] });
+  assert.strictEqual(call.get({ action: 'all', key: 'test-key' }).data.active.length, 0);
 });
 
 test('bad input gives a readable error, not a crash', () => {

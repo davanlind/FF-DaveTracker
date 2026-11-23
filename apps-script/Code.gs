@@ -6,8 +6,8 @@
  * change SECRET_KEY below, then Deploy → New deployment → Web app.
  * Full steps: docs/GOOGLE_SHEET_SETUP.md
  *
- * It creates (and keeps up to date) four tabs:
- *   Log, Plan Items, Plans, Tasks
+ * It creates (and keeps up to date) five tabs:
+ *   Log, Plan Items, Plans, Tasks, Active timers
  * Columns are matched by their HEADER NAME, so you can reorder columns,
  * and you can add your own extra columns (e.g. formulas) to the right.
  * Don't rename the existing headers or the ID column.
@@ -20,7 +20,7 @@ const SECRET_KEY = 'CHANGE-ME';
 
 /**
  * What goes in each tab. [field in the app, column header in the Sheet, kind, number format]
- * kinds: text | date | number | bool
+ * kinds: text | date | number | bool | json (a list stored as text)
  */
 const SCHEMA = {
   log: {
@@ -66,6 +66,21 @@ const SCHEMA = {
       ['end', 'End', 'date'],
       ['weeks', 'Weeks', 'number', '0'],
       ['notes', 'Notes', 'text'],
+      ['id', 'ID', 'text'],
+      ['updatedAt', 'Updated', 'text'],
+    ],
+  },
+  // Tasks being timed or on hold right now, so the phone and website show the same timers.
+  // Rows disappear when a task is finished (it becomes rows in Log).
+  active: {
+    sheet: 'Active timers',
+    columns: [
+      ['task', 'Task', 'text'],
+      ['type', 'Type', 'text'],
+      ['segments', 'Time segments (JSON)', 'json'],
+      ['planId', 'Plan ID', 'text'],
+      ['planItemId', 'Plan item ID', 'text'],
+      ['taskId', 'Task ID', 'text'],
       ['id', 'ID', 'text'],
       ['updatedAt', 'Updated', 'text'],
     ],
@@ -206,6 +221,7 @@ function toCell_(col, v) {
   if (kind === 'bool') return v === true || v === 'TRUE' || v === 'true';
   if (kind === 'number') return v === '' || isNaN(Number(v)) ? '' : Number(v);
   if (kind === 'date') return v ? String(v) : '';
+  if (kind === 'json') return typeof v === 'string' ? v : JSON.stringify(v);
   return String(v);
 }
 
@@ -218,6 +234,13 @@ function fromCell_(col, v, tz) {
   }
   if (kind === 'bool') return v === true || String(v).toUpperCase() === 'TRUE';
   if (kind === 'number') return v === '' ? null : Number(v);
+  if (kind === 'json') {
+    try {
+      return v === '' || v == null ? [] : JSON.parse(String(v));
+    } catch (e) {
+      return [];
+    }
+  }
   return v === null || v === undefined ? '' : String(v);
 }
 

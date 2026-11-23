@@ -1,4 +1,4 @@
-/* Today screen: start/stop the timer, quick-start planned tasks, see today's log. */
+/* Today screen: running task, tasks on hold, start/switch, quick-start planned tasks, today's log. */
 FF.views = FF.views || {};
 FF.actions = FF.actions || {};
 FF.forms = FF.forms || {};
@@ -10,31 +10,58 @@ FF.views.today = (() => {
   const M = FF.model;
   const esc = U.esc;
 
-  function timerCard() {
-    const t = S.timer();
-    if (t) {
-      const started = new Date(t.startedAt);
-      const item = t.planItemId ? S.get('planItems', t.planItemId) : null;
-      return `
-        <section class="card timer running">
-          <div class="eyebrow">Working on</div>
-          <div class="timer-task">${esc(t.task)} ${t.type === 'One-off' ? '<span class="badge">One-off</span>' : ''}</div>
-          <div class="clock" data-elapsed="${esc(t.startedAt)}">${U.fmtClock(Date.now() - started.getTime())}</div>
-          <div class="muted small">Started ${U.hm(started)}${U.ymd(started) !== U.today() ? ` on ${esc(U.fmtDate(U.ymd(started)))}` : ''} · <button class="link-btn inline" data-action="timer-adjust">change</button>${item ? ` · target ${U.fmtMins(item.targetMinutes)}, ${U.fmtMins(M.actualFor(item.id))} logged before this` : ''}</div>
-          <div class="btn-row">
-            <button class="btn primary big" data-action="timer-stop">■ Stop &amp; save</button>
-          </div>
-        </section>`;
-    }
+  const T = FF.timers;
+
+  function runningCard() {
+    const r = T.running();
+    if (!r) return '';
+    const seg = T.last(r);
+    const segStart = new Date(seg.start);
+    const item = r.planItemId ? S.get('planItems', r.planItemId) : null;
+    const resumed = r.segments.length > 1;
     return `
-      <section class="card timer">
+      <section class="card timer running">
+        <div class="eyebrow">Working on</div>
+        <div class="timer-task">${esc(r.task)} ${r.type === 'One-off' ? '<span class="badge">One-off</span>' : ''}</div>
+        <div class="clock" data-clock="${esc(r.id)}">${U.fmtClock(T.elapsedMs(r))}</div>
+        <div class="muted small">${resumed ? 'Resumed' : 'Started'} ${U.hm(segStart)}${U.ymd(segStart) !== U.today() ? ` on ${esc(U.fmtDate(U.ymd(segStart)))}` : ''} · <button class="link-btn inline" data-action="active-adjust" data-id="${esc(r.id)}">change</button>${item ? ` · target ${U.fmtMins(item.targetMinutes)}, ${U.fmtMins(M.actualFor(item.id))} logged before` : ''}</div>
+        <div class="btn-row two">
+          <button class="btn outline-light big" data-action="active-pause" data-id="${esc(r.id)}">❚❚ Pause</button>
+          <button class="btn primary big" data-action="active-finish" data-id="${esc(r.id)}">■ Finish</button>
+        </div>
+      </section>`;
+  }
+
+  function onHoldCard() {
+    const held = T.onHold();
+    if (!held.length) return '';
+    return `
+      <section class="card on-hold">
+        <div class="card-head"><h3>On hold</h3><span class="small muted">${held.length} task${held.length === 1 ? '' : 's'}</span></div>
+        <ul class="items">${held.map((r) => `
+          <li class="item-row">
+            <div class="item-main">
+              <div class="item-name">${esc(r.task)} ${r.type === 'One-off' ? '<span class="badge">One-off</span>' : ''}</div>
+              <div class="muted small"><b>${U.fmtMins(T.elapsedMs(r) / 60000)}</b> so far · paused ${esc(U.hm(new Date(T.last(r).end)))}${U.ymd(new Date(T.last(r).end)) !== U.today() ? ` ${esc(U.fmtDate(U.ymd(new Date(T.last(r).end))))}` : ''}</div>
+            </div>
+            <button class="icon-btn" data-action="active-finish" data-id="${esc(r.id)}" aria-label="Finish ${esc(r.task)}" title="Finish">■</button>
+            <button class="icon-btn play" data-action="active-resume" data-id="${esc(r.id)}" aria-label="Resume ${esc(r.task)}" title="Resume">▶</button>
+          </li>`).join('')}
+        </ul>
+      </section>`;
+  }
+
+  function startCard() {
+    const busy = !!T.running();
+    return `
+      <section class="card timer ${busy ? 'compact' : ''}">
         <form data-form="timer-start" class="start-form" autocomplete="off">
-          <label for="startPick" class="eyebrow">Start a task</label>
+          <label for="startPick" class="eyebrow">${busy ? 'Jump to another task' : 'Start a task'}</label>
           <select id="startPick" name="pick" data-change="start-pick">${FF.ui.taskOptions(U.today(), '')}</select>
           <div class="oneoff-field" id="startOneOffBox" hidden>
             <input id="startOneOff" name="oneoff" placeholder="One-off task name">
           </div>
-          <button class="btn primary big" type="submit">▶ Start timer</button>
+          <button class="btn ${busy ? '' : 'primary big'}" type="submit">▶ ${busy ? 'Start (puts the current one on hold)' : 'Start timer'}</button>
         </form>
         <button class="link-btn" data-action="entry-new">or log time without the timer</button>
       </section>`;
@@ -58,7 +85,8 @@ FF.views.today = (() => {
     const target = U.sum(items, (i) => i.targetMinutes);
     const actual = U.sum(items, (i) => M.actualFor(i.id));
     const doneCount = items.length - open.length;
-    const running = S.timer();
+    const running = T.running();
+    const held = new Set(T.onHold().map((r) => r.planItemId).filter(Boolean));
     const row = (i, tag = '') => {
       const st = M.statusOf(i);
       const pct = st.target ? Math.min(100, (st.actual / st.target) * 100) : 0;
@@ -69,7 +97,9 @@ FF.views.today = (() => {
             <div class="bar ${st.key}"><span style="width:${pct}%"></span></div>
             <div class="muted small">${U.fmtMins(st.actual)} of ${U.fmtMins(st.target)}${i.day && i.day !== date ? ` · ${U.fmtDate(i.day, { weekday: 'short' })}` : ''}</div>
           </div>
-          ${running ? '' : `<button class="icon-btn play" data-action="timer-start-item" data-id="${esc(i.id)}" aria-label="Start ${esc(i.task)}">▶</button>`}
+          ${running && running.planItemId === i.id
+            ? '<span class="badge running">Running</span>'
+            : `${held.has(i.id) ? '<span class="badge">On hold</span>' : ''}<button class="icon-btn play" data-action="timer-start-item" data-id="${esc(i.id)}" aria-label="Start ${esc(i.task)}">▶</button>`}
         </li>`;
     };
     return `
@@ -103,15 +133,20 @@ FF.views.today = (() => {
       <div class="page-head">
         <h1>${esc(U.fmtDateLong(U.today()))}</h1>
       </div>
-      ${timerCard()}
+      ${runningCard()}
+      ${onHoldCard()}
+      ${startCard()}
       ${planCard()}
       ${logCard()}`;
   }
 
   /* ---------- actions ---------- */
   function startTimer(choice) {
-    S.setTimer({ ...choice, startedAt: new Date().toISOString() });
-    FF.ui.toast(`Timer started: ${choice.task}`, 'ok');
+    const res = T.start(choice);
+    if (res.already) return FF.ui.toast(`${choice.task} is already running`);
+    const verb = res.resumed ? 'Resumed' : 'Started';
+    FF.ui.toast(res.paused ? `${verb} ${res.rec.task} · ${res.paused.task} on hold` : `${verb} ${res.rec.task}`, 'ok');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   FF.changes['start-pick'] = (el) => {
@@ -125,6 +160,7 @@ FF.views.today = (() => {
     if (!pick) return FF.ui.toast('Choose a task first', 'error');
     const choice = FF.ui.resolveTaskChoice(pick, form.elements.oneoff.value, U.today());
     if (!choice) return FF.ui.toast('Type a name for the one-off task', 'error');
+    form.reset();
     startTimer(choice);
   };
 
@@ -133,25 +169,79 @@ FF.views.today = (() => {
     if (item) startTimer({ task: item.task, type: item.type, taskId: item.taskId, planItemId: item.id, planId: item.planId });
   };
 
-  FF.actions['timer-stop'] = () => {
-    const t = S.timer();
-    if (!t) return;
-    const started = new Date(t.startedAt);
-    const minutes = Math.max(1, Math.round((Date.now() - started.getTime()) / 60000));
-    FF.ui.entryForm({
-      mode: 'stop',
-      entry: {
-        task: t.task, type: t.type, taskId: t.taskId, planItemId: t.planItemId, planId: t.planId,
-        date: U.ymd(started), start: U.hm(started), end: U.fromMins(U.toMins(U.hm(started)) + minutes), minutes,
-      },
-    });
+  FF.actions['active-resume'] = (el) => {
+    const res = T.resume(el.dataset.id);
+    if (res.rec) FF.ui.toast(res.paused ? `Resumed ${res.rec.task} · ${res.paused.task} on hold` : `Resumed ${res.rec.task}`, 'ok');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Forgot to press start? Move the running timer's start back (or forward).
-  FF.actions['timer-adjust'] = () => {
-    const t = S.timer();
-    if (!t) return;
-    const started = new Date(t.startedAt);
+  FF.actions['active-pause'] = (el) => {
+    const r = S.get('active', el.dataset.id);
+    T.pause(el.dataset.id);
+    if (r) FF.ui.toast(`${r.task} on hold`);
+  };
+
+  /** Finish a task: save its time to the Log (one row per stint). */
+  FF.actions['active-finish'] = (el) => {
+    const r = S.get('active', el.dataset.id);
+    if (!r) return;
+    const rows = T.toEntries(r);
+    const base = { task: r.task, type: r.type, taskId: r.taskId, planItemId: r.planItemId, planId: r.planId, activeId: r.id };
+    if (rows.length === 1) {
+      FF.ui.entryForm({ mode: 'stop', entry: { ...base, ...rows[0] } });
+      return;
+    }
+    finishMany(r, base, rows);
+  };
+
+  function finishMany(r, base, rows) {
+    const item = r.planItemId ? S.get('planItems', r.planItemId) : null;
+    const total = U.sum(rows, (e) => e.minutes);
+    const worked = S.settings().lastWorked || 'Solo';
+    FF.ui.modal({
+      title: 'Save this time',
+      cancelLabel: 'Not yet',
+      submitLabel: `Save ${rows.length} entries`,
+      body: `
+        <div class="field"><span class="label">Task</span><div class="readonly">${esc(r.task)}</div></div>
+        <div class="field">
+          <span class="label">You worked on it ${rows.length} times · ${U.fmtMins(total)} in total</span>
+          <ul class="stints">${rows.map((e) => `<li><span>${esc(U.fmtDate(e.date, { weekday: 'short', day: 'numeric', month: 'short' }))}</span><span>${esc(e.start)}–${esc(e.end)}</span><b>${U.fmtMins(e.minutes)}</b></li>`).join('')}</ul>
+          <p class="hint">Each one is saved as its own row. You can change any of them later in the Log.</p>
+        </div>
+        ${FF.ui.workedField(worked, '')}
+        ${item ? `<div class="field"><label class="check"><input type="checkbox" name="done" ${item.done ? 'checked' : ''}><span>This planned task is now <b>finished</b></span></label>
+          <div class="hint">Counts towards: ${esc(item.task)} (target ${U.fmtMins(item.targetMinutes)})</div></div>` : ''}
+        <div class="field"><label for="fm-notes">Notes <span class="muted">(optional)</span></label>
+          <textarea id="fm-notes" name="notes" rows="2"></textarea></div>`,
+      extraButtons: [{
+        label: 'Discard', cls: 'danger ghost',
+        onClick: async () => {
+          const ok = await FF.ui.confirm('Throw away this timer?', 'None of this time will be logged.', 'Discard');
+          if (!ok) return false;
+          S.remove('active', r.id);
+          FF.ui.toast('Timer discarded');
+        },
+      }],
+      onOpen: (form) => FF.ui.wireWorked(form),
+      onSubmit: (form) => {
+        const f = form.elements;
+        const w = f.worked.value || 'Solo';
+        const helpers = w === 'With help' ? f.helpers.value.trim() : '';
+        rows.forEach((e) => S.upsert('log', { ...base, ...e, worked: w, helpers, notes: f.notes.value.trim() }, { silent: true }));
+        if (item && f.done && item.done !== f.done.checked) S.upsert('planItems', { ...item, done: f.done.checked }, { silent: true });
+        S.setSettings({ lastWorked: w });
+        S.remove('active', r.id);
+        FF.ui.toast(`Logged ${U.fmtMins(total)} on ${r.task}`, 'ok');
+      },
+    });
+  }
+
+  // Forgot to press start? Move the running segment's start.
+  FF.actions['active-adjust'] = (el) => {
+    const r = S.get('active', el.dataset.id);
+    if (!T.isRunning(r)) return;
+    const started = new Date(T.last(r).start);
     FF.ui.modal({
       title: 'Change start time',
       body: `
@@ -167,8 +257,8 @@ FF.views.today = (() => {
         const [h, m] = f.time.value.split(':').map(Number);
         const d = U.parseYmd(f.date.value);
         d.setHours(h, m, 0, 0);
-        if (d.getTime() > Date.now()) return FF.ui.invalid(form, 'time', "That's in the future. Pick a time before now.");
-        S.setTimer({ ...t, startedAt: d.toISOString() });
+        const err = T.setCurrentStart(r.id, d);
+        if (err) return FF.ui.invalid(form, 'time', err);
         FF.ui.toast(`Timer now started at ${f.time.value}`, 'ok');
       },
     });

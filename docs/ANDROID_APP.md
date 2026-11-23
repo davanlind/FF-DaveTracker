@@ -25,8 +25,8 @@ Settings → About shows which version you have.
 
 ## Good to know
 
-- **Timer:** a running timer only lives on the device you started it on. Stop it there.
-  The saved time then appears everywhere.
+- **Timers:** tasks you're timing or have on hold are shared through the Sheet too. Start on your phone and you'll see it
+  on the website. Changes show up when the other device next syncs (when you open it, or tap Sync now in Settings).
 - **Download CSV / Download backup** save into **Downloads › FF Tracker** on the phone.
 - The phone's **back button** closes pop-ups, then goes back through screens.
 

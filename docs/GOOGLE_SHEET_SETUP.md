@@ -35,7 +35,8 @@ A **secret key** (a password you make up) stops anyone else from using that addr
 2. Google asks for permission. Click **Review permissions**, then pick your account.
 3. You'll probably see **"Google hasn't verified this app"**. That's normal for a script
    you wrote yourself. Click **Advanced → Go to F&F Tracker (unsafe) → Allow**.
-4. Go back to your Sheet. You should now see tabs called **Log, Plan Items, Plans, Tasks**.
+4. Go back to your Sheet. You should now see tabs called **Log, Plan Items, Plans, Tasks, Active timers**.
+   (*Active timers* holds tasks you're timing or have on hold right now, so your phone and the website show the same ones.)
 
 ## 4. Publish it as a web app
 

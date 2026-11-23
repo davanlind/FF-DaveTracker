@@ -2,7 +2,7 @@
 
 A simple website for tracking work time against targets.
 
-- **Time your work** with a start/stop timer, or log time afterwards.
+- **Time your work** with a timer, or log time afterwards. Keep **several tasks open**: pause one, jump to another, come back later.
 - **Repeatable tasks** (things you do often, each with a usual target time) and **one-off tasks**.
 - Record whether you worked **solo or had help**, and who helped.
 - **Plan a week or fortnight ahead**, always starting on a Monday, with a target time for each task.
@@ -43,7 +43,7 @@ works, but data is only saved in that one browser.
 
 | Screen | What it's for |
 |---|---|
-| **Today** | Start/stop the timer, quick-start anything planned (▶), see what you've logged today. |
+| **Today** | Start a task, **pause** it, or **jump to another**. Whatever was running goes **on hold** until you resume (▶) or finish (■) it. Quick-start anything planned, and see what you've logged today. |
 | **Plan** | Pick a week, tap *Plan this week* or *Plan a fortnight*, then add tasks with target times. *Add all repeatable tasks* fills in your usual list in one go; *copy the plan from…* reuses last period's plan. Tick tasks when they're finished. |
 | **Review** | For any plan: total target vs actual, each task's status (*Hit target*, *Over by…*, *In progress*, *Not started*), time per day, solo vs help, and unplanned work. |
 | **Log** | Every entry, by week/month. Tap one to fix it. *Download CSV* for a spreadsheet file. |
