@@ -1,0 +1,62 @@
+# Builds the Android app (APK) and publishes it on the repo's Releases page.
+# Runs whenever the app's code changes on main, or by hand: Actions tab → Build Android app → Run workflow.
+# Latest APK is always at:
+#   https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker.apk
+name: Build Android app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'manifest.webmanifest'
+      - 'css/**'
+      - 'js/**'
+      - 'icons/**'
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish the Release
+
+concurrency:
+  group: android-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk FF-Tracker.apk
+
+      - name: Keep a copy on this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: FF-Tracker-apk
+          path: FF-Tracker.apk
+
+      - name: Publish to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-1.0.${{ github.run_number }}
+          name: F&F Tracker for Android 1.0.${{ github.run_number }}
+          make_latest: true
+          files: FF-Tracker.apk
+          body: |
+            Download **FF-Tracker.apk** below on your Android phone and open it to install or update.
+            Updating keeps your data. Built from commit ${{ github.sha }}.

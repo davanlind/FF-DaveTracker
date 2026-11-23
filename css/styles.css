@@ -38,6 +38,11 @@ h3 { font-size: 1rem; }
 p { margin: 0.5rem 0; line-height: 1.45; }
 [hidden] { display: none !important; }
 
+/* In the Android app the phone's own bars are handled by the app, so no extra safe-area padding. */
+.in-app .topbar { padding-top: 10px; }
+.in-app .tabbar { padding-bottom: 0; }
+.in-app body { padding-bottom: calc(var(--tabbar-h) + 16px); }
+
 /* ---------- top bar ---------- */
 .topbar {
   position: sticky; top: 0; z-index: 10;

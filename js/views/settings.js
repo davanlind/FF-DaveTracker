@@ -41,9 +41,16 @@ FF.views.settings = (() => {
         </div>
       </section>
 
+      ${FF.isApp ? '' : `
+      <section class="card">
+        <div class="card-head"><h3>Android app</h3></div>
+        <p class="muted">Install F&amp;F Tracker on an Android phone. Connect it to the same Sheet (same URL and key) and it shares everything with this website.</p>
+        <a class="btn" href="${esc(FF.APK_URL)}">⇩ Download the Android app (APK)</a>
+      </section>`}
+
       <section class="card">
         <div class="card-head"><h3>About</h3></div>
-        <p class="muted small">F&amp;F Tracker v${esc(FF.VERSION)} · <a href="https://github.com/davanlind/FF-DaveTracker" target="_blank" rel="noopener">Code on GitHub</a></p>
+        <p class="muted small">F&amp;F Tracker v${esc(FF.VERSION)}${FF.isApp ? ` · Android app ${esc(window.FFAndroid.appVersion ? window.FFAndroid.appVersion() : '')} · <a href="${esc(FF.APK_URL)}">Get the latest APK</a>` : ''} · <a href="https://github.com/davanlind/FF-DaveTracker" target="_blank" rel="noopener">Code on GitHub</a></p>
       </section>`;
   }
 

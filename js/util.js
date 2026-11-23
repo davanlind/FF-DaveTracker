@@ -3,7 +3,11 @@
  * and clock times as 'HH:MM' strings. This avoids time-zone surprises. */
 window.FF = window.FF || {};
 
-FF.VERSION = '1.0.0';
+FF.VERSION = '1.1.0';
+
+/** True when running inside the Android app (android/ folder), false on the website. */
+FF.isApp = !!window.FFAndroid;
+FF.APK_URL = 'https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker.apk';
 
 FF.util = (() => {
   const pad = (n) => String(n).padStart(2, '0');
@@ -114,6 +118,11 @@ FF.util = (() => {
   };
 
   const download = (filename, text, type = 'text/plain') => {
+    // In the Android app, the app itself saves the file into Downloads.
+    if (window.FFAndroid && window.FFAndroid.saveFile) {
+      window.FFAndroid.saveFile(filename, type, text);
+      return;
+    }
     const blob = new Blob([text], { type });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

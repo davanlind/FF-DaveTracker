@@ -297,6 +297,42 @@ async function main() {
     assert.match(await c.textContent('#toast'), /Wrong secret key/);
   });
 
+  await step('website Settings offers the Android app download', async () => {
+    await a.goto(base + '#settings');
+    const href = await a.getAttribute('a[href$="FF-Tracker.apk"]', 'href');
+    assert.match(href, /releases\/latest\/download\/FF-Tracker\.apk$/);
+  });
+
+  await step('inside the Android app: files save through the app, back button closes pop-ups', async () => {
+    const ctx = await browser.newContext({ viewport: { width: 412, height: 915 } });
+    await ctx.addInitScript(() => {
+      window.__saved = [];
+      window.FFAndroid = {
+        saveFile: (name, type, text) => { window.__saved.push({ name, type, text }); return true; },
+        appVersion: () => '1.0.7',
+      };
+    });
+    const p = await ctx.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    await p.goto(base + '#log');
+    assert.strictEqual(await p.evaluate(() => document.documentElement.classList.contains('in-app')), true);
+    await p.click('[data-action="log-csv"]');
+    const saved = await p.evaluate(() => window.__saved);
+    assert.strictEqual(saved.length, 1);
+    assert.match(saved[0].name, /\.csv$/);
+    assert.match(saved[0].text, /^Date,Start,End/);
+    await p.click('[data-action="entry-new"]');
+    assert.strictEqual(await p.evaluate(() => FF.app.back()), true);
+    assert.strictEqual(await p.evaluate(() => document.getElementById('modal').open), false);
+    assert.strictEqual(await p.evaluate(() => FF.app.back()), false);
+    await p.goto(base + '#settings');
+    assert.strictEqual(await p.$('section a.btn[href$="FF-Tracker.apk"]'), null, 'no download button inside the app');
+    assert.match(await p.textContent('#view'), /Android app 1\.0\.7/);
+    assert.deepStrictEqual(errs, []);
+    await ctx.close();
+  });
+
   await step('no browser errors anywhere', async () => {
     assert.deepStrictEqual(a.errors, []);
     assert.deepStrictEqual(b.errors, []);

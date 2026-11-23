@@ -10,8 +10,10 @@ A simple website for tracking work time against targets.
 - Saves to an **ongoing Google Sheet**, so every device sees the same data. It also works offline and catches up later.
 - Download your log as a **CSV** file, or a full backup.
 
-Works on a phone or computer. On Android you can add it to your home screen
-(Chrome menu ⋮ → **Add to Home screen**) and it opens like an app.
+Use it on the **website** (phone or computer) or install the **Android app**. Connected to the
+same Google Sheet, they share all their data, so it doesn't matter where you enter something.
+
+**📱 Android app:** [download FF-Tracker.apk](https://github.com/davanlind/FF-DaveTracker/releases/latest/download/FF-Tracker.apk). Install steps are in [docs/ANDROID_APP.md](docs/ANDROID_APP.md).
 
 ---
 
@@ -58,7 +60,8 @@ Durations can be typed as `90`, `1:30`, `1h 30m`, `1h30` or `1.5h`. All of those
 Read **[AGENTS.md](AGENTS.md)**. It explains how the code is laid out and the rules for changing it.
 
 Quick facts: plain HTML/CSS/JavaScript, **no build step, no frameworks**. Just open `index.html`.
-The Google Sheet "backend" is `apps-script/Code.gs`.
+The Google Sheet "backend" is `apps-script/Code.gs`. The Android app in `android/` wraps the same
+web files and is built automatically by GitHub Actions (`.github/workflows/android.yml`).
 
 Run the tests:
 

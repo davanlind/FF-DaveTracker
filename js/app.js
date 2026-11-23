@@ -89,14 +89,27 @@ FF.app = (() => {
     setInterval(tick, 1000);
   }
 
+  /** Android back button: close an open pop-up. Returns true if it did. */
+  function back() {
+    for (const id of ['confirm-modal', 'modal']) {
+      const d = document.getElementById(id);
+      if (d && d.open) {
+        d.close();
+        return true;
+      }
+    }
+    return false;
+  }
+
   function start() {
+    if (FF.isApp) document.documentElement.classList.add('in-app');
     wire();
     render();
     tick();
     FF.sync.start();
   }
 
-  return { start, render };
+  return { start, render, back };
 })();
 
 document.addEventListener('DOMContentLoaded', FF.app.start);

@@ -30,6 +30,9 @@ js/app.js                  router (#today, #plan…), click/submit/change wiring
 apps-script/Code.gs        Google Apps Script "backend"; pasted into the Sheet by the user
 docs/GOOGLE_SHEET_SETUP.md step-by-step setup for the Sheet (beginner friendly)
 tests/                     Node tests: Code.gs against a fake Sheet + Playwright end-to-end
+android/                   Android app (Kotlin WebView shell) that bundles the web files above
+.github/workflows/android.yml  GitHub Actions: builds the APK on push, publishes a Release
+docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
 ```
 
 - **No build step, no modules, no dependencies at runtime.** Classic `<script>` tags sharing one global, `window.FF`.
@@ -42,6 +45,26 @@ tests/                     Node tests: Code.gs against a fake Sheet + Playwright
   `data-change="x"` → `FF.changes.x(el, event)` (change).
 - **Always escape user text** with `FF.util.esc()` when building HTML.
 - Pop-up forms use `FF.ui.modal()` (a `<dialog id="modal">`); confirmations use a second `<dialog id="confirm-modal">` so they can sit on top.
+
+## Android app
+
+- `android/app/src/main/java/au/ff/tracker/MainActivity.kt` is the **only** Kotlin file. It shows a WebView that loads
+  `https://appassets.androidplatform.net/www/index.html`, served from APK assets via `WebViewAssetLoader`.
+- The web files are **copied in at build time** by the `copyWebAssets` task in `android/app/build.gradle.kts`
+  (`index.html`, `manifest.webmanifest`, `css/`, `js/`, `icons/`). Never edit copies inside `android/`; change the web files.
+  If you add a new top-level web folder, add it to that task's `includes` **and** to the workflow's `paths`.
+- The page talks to the app through `window.FFAndroid` (a `@JavascriptInterface`): `saveFile(name, mime, text)` and
+  `appVersion()`. `FF.isApp` is true inside the app (the page gets class `in-app` on `<html>`). The app's back button calls
+  `FF.app.back()`, which closes an open dialog and returns true.
+- Data sharing between the website and the app happens **only through the Google Sheet** (each has its own localStorage).
+- Builds: `.github/workflows/android.yml` runs `./gradlew assembleRelease` on ubuntu (JDK 17), then publishes the APK as a
+  GitHub Release tagged `android-1.0.<run number>`. The stable link is `releases/latest/download/FF-Tracker.apk`.
+  `versionCode` = GitHub run number, so every build installs as an update.
+- Signing uses `android/ff-tracker-sideload.keystore` (password `fftracker`), **committed on purpose** so every build has the
+  same signature and updates keep the user's data. It's for side-loading only. If this ever goes to the Play Store,
+  make a new private key and keep it in GitHub Secrets.
+- Versions: AGP 8.7.3, Kotlin 2.1.0, Gradle 8.11.1 (wrapper), compileSdk/targetSdk 35, minSdk 26. No Compose, no AppCompat.
+- The Android build can't run in sandboxes that block Google's Maven. Check the GitHub Actions run instead.
 
 ## Data model
 
@@ -91,5 +114,5 @@ SCREENSHOTS=1 npm run test:e2e     # also saves screenshots to tests/screenshots
 
 ## Ideas not built yet
 
-Pause/resume the timer · sync a running timer across devices · edit plan notes · weekly summary tab in the Sheet ·
+Pause/resume the timer · sync a running timer across devices (website ↔ app) · Android notification while a timer runs · edit plan notes · weekly summary tab in the Sheet ·
 offline caching with a service worker (be careful: cached old versions confuse beginners) · charts over many weeks.
