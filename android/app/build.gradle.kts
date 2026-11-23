@@ -74,7 +74,10 @@ abstract class CopyWebAssets : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
     val webFiles: FileTree
-        get() = webRoot.get().asFileTree.matching { include(includes.get()) }
+        get() {
+            val patterns = includes.get() // read first: inside matching {} "includes" means something else
+            return webRoot.get().asFileTree.matching { include(patterns) }
+        }
 
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
