@@ -59,6 +59,7 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("com.google.android.gms:play-services-wearable:18.2.0") // hands the Sheet link to the watch app
+    implementation("androidx.fragment:fragment-ktx:1.8.5") // play services brings an old Fragment; the file picker needs a newer one
 }
 
 /**
