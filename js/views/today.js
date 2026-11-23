@@ -51,17 +51,71 @@ FF.views.today = (() => {
       </section>`;
   }
 
+  /* ---------- "type or pick a task" box ---------- */
+
+  /** Everything you might want to start: planned items, repeatable tasks, recent one-offs. */
+  function taskSuggestions() {
+    const date = U.today();
+    const plan = M.planFor(date);
+    const out = [];
+    const seen = new Set();
+    const add = (value, label, sub, group) => {
+      const k = label.trim().toLowerCase();
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push({ value, label, sub, group });
+    };
+    if (plan) {
+      M.itemsFor(plan.id).filter((i) => !i.done).forEach((i) =>
+        add(`p:${i.id}`, i.task, `Planned · target ${U.fmtMins(i.targetMinutes)}${i.day === date ? ' · today' : ''}`, 'Planned'));
+    }
+    M.activeTasks().forEach((t) => add(`t:${t.id}`, t.name, t.category || 'Repeatable task', 'Your tasks'));
+    const recent = S.all('log')
+      .filter((e) => e.type === 'One-off')
+      .sort((a, b) => (b.date + b.start).localeCompare(a.date + a.start));
+    recent.forEach((e) => {
+      if (out.filter((x) => x.group === 'Used recently').length < 8) add(`o:${e.task}`, e.task, `One-off · last ${U.fmtDate(e.date, { day: 'numeric', month: 'short' })}`, 'Used recently');
+    });
+    return out;
+  }
+
+  function suggestHtml(text) {
+    const q = text.trim().toLowerCase();
+    const all = taskSuggestions();
+    const item = (x) => `
+      <li><button type="button" class="suggest-item" data-action="start-suggest" data-value="${esc(x.value)}">
+        <span class="suggest-name">${esc(x.label)}</span><span class="suggest-sub">${esc(x.sub)}</span>
+        <span class="suggest-go">▶</span>
+      </button></li>`;
+    if (!q) {
+      if (!all.length) return '<p class="hint">Type what you\'re doing and tap Start. Tasks you use show up here to tap next time.</p>';
+      const groups = U.groupBy(all, (x) => x.group);
+      return [...groups.entries()].map(([g, list]) => `<div class="suggest-group">${esc(g)}</div><ul class="suggest">${list.map(item).join('')}</ul>`).join('');
+    }
+    const words = q.split(/\s+/);
+    const hits = all
+      .filter((x) => words.every((w) => x.label.toLowerCase().includes(w)))
+      .sort((a, b) => b.label.toLowerCase().startsWith(q) - a.label.toLowerCase().startsWith(q))
+      .slice(0, 8);
+    const exact = all.some((x) => x.label.trim().toLowerCase() === q);
+    return `<ul class="suggest">${hits.map(item).join('')}
+      ${exact ? '' : `<li><button type="button" class="suggest-item new" data-action="start-typed">
+        <span class="suggest-name">Start “${esc(text.trim())}”</span><span class="suggest-sub">New one-off task</span><span class="suggest-go">▶</span>
+      </button></li>`}</ul>`;
+  }
+
   function startCard() {
     const busy = !!T.running();
     return `
-      <section class="card timer ${busy ? 'compact' : ''}">
+      <section class="card timer start-card">
         <form data-form="timer-start" class="start-form" autocomplete="off">
-          <label for="startPick" class="eyebrow">${busy ? 'Jump to another task' : 'Start a task'}</label>
-          <select id="startPick" name="pick" data-change="start-pick">${FF.ui.taskOptions(U.today(), '')}</select>
-          <div class="oneoff-field" id="startOneOffBox" hidden>
-            <input id="startOneOff" name="oneoff" placeholder="One-off task name">
+          <label for="startTask" class="eyebrow">${busy ? 'Jump to another task' : 'Start a task'}</label>
+          <div class="picker-row">
+            <input id="startTask" name="task" placeholder="Type a task, or pick one below" autocomplete="off" autocapitalize="sentences" enterkeyhint="go" data-input="start-filter">
+            <button class="btn primary" type="submit">▶ Start</button>
           </div>
-          <button class="btn ${busy ? '' : 'primary big'}" type="submit">▶ ${busy ? 'Start (puts the current one on hold)' : 'Start timer'}</button>
+          <div id="startSuggest" class="suggest-box">${suggestHtml('')}</div>
+          ${busy ? '<p class="hint">Starting another task puts the current one on hold.</p>' : ''}
         </form>
         <button class="link-btn" data-action="entry-new">or log time without the timer</button>
       </section>`;
@@ -149,19 +203,47 @@ FF.views.today = (() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  FF.changes['start-pick'] = (el) => {
-    const box = document.getElementById('startOneOffBox');
-    box.hidden = el.value !== '__oneoff';
-    if (!box.hidden) document.getElementById('startOneOff').focus();
+  FF.inputs = FF.inputs || {};
+  FF.inputs['start-filter'] = (el) => {
+    const box = document.getElementById('startSuggest');
+    if (box) box.innerHTML = suggestHtml(el.value);
   };
 
+  /** Turn typed text into a task: a planned item or repeatable task with that name, or a new one-off. */
+  function choiceFromText(text) {
+    const q = text.trim().toLowerCase();
+    const match = taskSuggestions().find((x) => x.label.trim().toLowerCase() === q);
+    if (match) return choiceFromValue(match.value);
+    return { task: text.trim(), type: 'One-off', taskId: '', planItemId: '', planId: '' };
+  }
+  function choiceFromValue(v) {
+    if (v.startsWith('o:')) return { task: v.slice(2), type: 'One-off', taskId: '', planItemId: '', planId: '' };
+    return FF.ui.resolveTaskChoice(v, '', U.today());
+  }
+
   FF.forms['timer-start'] = (form) => {
-    const pick = form.elements.pick.value;
-    if (!pick) return FF.ui.toast('Choose a task first', 'error');
-    const choice = FF.ui.resolveTaskChoice(pick, form.elements.oneoff.value, U.today());
-    if (!choice) return FF.ui.toast('Type a name for the one-off task', 'error');
-    form.reset();
-    startTimer(choice);
+    const text = form.elements.task.value;
+    if (!text.trim()) {
+      FF.ui.toast('Type what you\'re working on, or tap one from the list', 'error');
+      form.elements.task.focus();
+      return;
+    }
+    form.elements.task.value = '';
+    form.elements.task.blur();
+    startTimer(choiceFromText(text));
+  };
+  FF.actions['start-typed'] = () => {
+    const form = document.querySelector('form[data-form="timer-start"]');
+    if (form) FF.forms['timer-start'](form);
+  };
+  FF.actions['start-suggest'] = (el) => {
+    const choice = choiceFromValue(el.dataset.value);
+    const input = document.getElementById('startTask');
+    if (input) {
+      input.value = '';
+      input.blur();
+    }
+    if (choice) startTimer(choice);
   };
 
   FF.actions['timer-start-item'] = (el) => {

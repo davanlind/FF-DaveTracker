@@ -76,7 +76,7 @@ async function main() {
   const a = await device('phone');
 
   await step('Today screen loads with no errors', async () => {
-    await a.waitForSelector('#startPick');
+    await a.waitForSelector('#startTask');
     await a.shot('01-today-empty');
     assert.deepStrictEqual(a.errors, []);
   });
@@ -302,10 +302,46 @@ async function main() {
     await a.click('#modal [data-close].btn');
   });
 
+  await step('start box: type to filter, tap a suggestion, or type a new one-off', async () => {
+    await a.goto(base + '#today');
+    // empty box lists planned tasks, repeatable tasks and recent one-offs
+    const groups = await a.$$eval('.suggest-group', (els) => els.map((e) => e.textContent));
+    assert.deepStrictEqual(groups, ['Planned', 'Your tasks', 'Used recently']);
+    // typing filters
+    await a.fill('#startTask', 'photo');
+    let names = await a.$$eval('#startSuggest .suggest-name', (els) => els.map((e) => e.textContent));
+    assert.deepStrictEqual(names, ['Marketing photoshoot', 'Start “photo”']);
+    await a.shot('12-start-typing');
+    // tap the suggestion: starts the planned task straight away
+    await a.click('#startSuggest [data-action="start-suggest"]');
+    let r = await a.evaluate(() => FF.timers.running());
+    assert.strictEqual(r.task, 'Marketing photoshoot');
+    assert.ok(r.planItemId, 'linked to the plan');
+    assert.strictEqual(await a.inputValue('#startTask'), '');
+    // a recent one-off can be picked again
+    await a.fill('#startTask', 'unload');
+    await a.click('#startSuggest [data-action="start-suggest"]');
+    r = await a.evaluate(() => FF.timers.running());
+    assert.deepStrictEqual([r.task, r.type], ['Unload surprise delivery', 'One-off']);
+    // typing a task's exact name and pressing Enter uses that task, not a new one-off
+    await a.fill('#startTask', 'showroom store run');
+    await a.press('#startTask', 'Enter');
+    r = await a.evaluate(() => FF.timers.running());
+    assert.deepStrictEqual([r.task, r.type], ['Showroom store run', 'Repeatable']);
+    // something brand new
+    await a.fill('#startTask', 'Call courier');
+    await a.click('#startSuggest [data-action="start-typed"]');
+    r = await a.evaluate(() => FF.timers.running());
+    assert.deepStrictEqual([r.task, r.type], ['Call courier', 'One-off']);
+    // empty Start just asks for a name
+    await a.click('form[data-form="timer-start"] button[type=submit]');
+    assert.match(await a.textContent('#toast'), /Type what you're working on/);
+    await a.evaluate(() => FF.store.all('active').slice().forEach((x) => FF.store.remove('active', x.id)));
+  });
+
   await step('move a running timer\'s start time back', async () => {
     await a.goto(base + '#today');
-    await a.selectOption('#startPick', '__oneoff');
-    await a.fill('#startOneOff', 'Late start');
+    await a.fill('#startTask', 'Late start');
     await a.click('form[data-form="timer-start"] button[type=submit]');
     await a.click('[data-action="active-adjust"]');
     const when = await a.evaluate(() => { const d = new Date(Date.now() - 30 * 60000); return [FF.util.ymd(d), FF.util.hm(d)]; });
@@ -329,8 +365,7 @@ async function main() {
   await step('switch between several tasks: pause, resume, finish with two stints', async () => {
     await a.goto(base + '#today');
     const startOneOff = async (name) => {
-      await a.selectOption('#startPick', '__oneoff');
-      await a.fill('#startOneOff', name);
+      await a.fill('#startTask', name);
       await a.click('form[data-form="timer-start"] button[type=submit]');
     };
     await startOneOff('Picking - Replen');
@@ -339,7 +374,7 @@ async function main() {
     assert.deepStrictEqual(st, { run: 'Urgent delivery', held: ['Picking - Replen'] });
     await a.waitForSelector('.on-hold');
     assert.match(await a.textContent('#timerBadge'), /\+1$/);
-    assert.match(await a.textContent('label[for="startPick"]'), /Jump to another task/);
+    assert.match(await a.textContent('label[for="startTask"]'), /Jump to another task/);
     // starting the same one-off again resumes it rather than making a duplicate
     await startOneOff('picking - replen');
     st = await a.evaluate(() => ({ run: FF.timers.running().task, n: FF.store.all('active').length, segs: FF.timers.running().segments.length }));
@@ -380,8 +415,7 @@ async function main() {
   });
 
   await step('a running task shows on the other device too', async () => {
-    await a.selectOption('#startPick', '__oneoff');
-    await a.fill('#startOneOff', 'Stock count');
+    await a.fill('#startTask', 'Stock count');
     await a.click('form[data-form="timer-start"] button[type=submit]');
     await a.waitForFunction(() => FF.store.pendingCount() === 0, null, { timeout: 5000 });
     await b.goto(base + '#settings');
@@ -400,8 +434,7 @@ async function main() {
 
   await step('timer survives a page reload', async () => {
     await a.goto(base + '#today');
-    await a.selectOption('#startPick', '__oneoff');
-    await a.fill('#startOneOff', 'Quick tidy');
+    await a.fill('#startTask', 'Quick tidy');
     await a.click('form[data-form="timer-start"] button[type=submit]');
     await a.reload();
     await a.waitForSelector('.timer.running');

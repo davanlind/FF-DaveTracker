@@ -2,8 +2,9 @@
  *
  * How screens work: each file in js/views/ makes FF.views.<name> with a
  * render() that returns HTML. Buttons say what they do with data-action="...",
- * forms with data-form="...", dropdowns/checkboxes with data-change="...".
- * The matching functions live in FF.actions / FF.forms / FF.changes.
+ * forms with data-form="...", dropdowns/checkboxes with data-change="...", and text boxes
+ * that react while typing with data-input="...".
+ * The matching functions live in FF.actions / FF.forms / FF.changes / FF.inputs.
  */
 FF.app = (() => {
   const S = FF.store;
@@ -35,6 +36,7 @@ FF.app = (() => {
       if (el.tagName === 'SELECT' && ![...el.options].some((o) => o.value === v)) return;
       el.value = v;
       if (el.dataset.change && FF.changes[el.dataset.change] && el.tagName === 'SELECT') FF.changes[el.dataset.change](el);
+      if (el.dataset.input && FF.inputs && FF.inputs[el.dataset.input]) FF.inputs[el.dataset.input](el);
     });
     if (focused) document.getElementById(focused)?.focus();
 
@@ -79,6 +81,10 @@ FF.app = (() => {
       if (!form || !FF.forms[form.dataset.form]) return;
       e.preventDefault();
       FF.forms[form.dataset.form](form, e);
+    });
+    document.addEventListener('input', (e) => {
+      const el = e.target.closest('[data-input]');
+      if (el && FF.inputs && FF.inputs[el.dataset.input]) FF.inputs[el.dataset.input](el, e);
     });
     document.addEventListener('change', (e) => {
       const el = e.target.closest('[data-change]');

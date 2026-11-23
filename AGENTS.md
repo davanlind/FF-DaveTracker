@@ -43,8 +43,12 @@ docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
 - **Events** use attributes, not inline handlers:
   `data-action="x"` → `FF.actions.x(el, event)` (click) ·
   `data-form="x"` → `FF.forms.x(form, event)` (submit) ·
-  `data-change="x"` → `FF.changes.x(el, event)` (change).
+  `data-change="x"` → `FF.changes.x(el, event)` (change) ·
+  `data-input="x"` → `FF.inputs.x(el, event)` (every keystroke; also re-run after a re-render to restore state).
 - **Always escape user text** with `FF.util.esc()` when building HTML.
+- The Today "start a task" box is a type-or-pick list (`taskSuggestions()` / `suggestHtml()` in `js/views/today.js`):
+  open planned items, repeatable tasks, then recent one-offs from the log. Typed text matching a name exactly uses that task;
+  anything else starts a new one-off. (The Log/Plan forms still use the `FF.ui.taskOptions()` dropdown.)
 - Pop-up forms use `FF.ui.modal()` (a `<dialog id="modal">`); confirmations use a second `<dialog id="confirm-modal">` so they can sit on top.
 
 ## Android app
