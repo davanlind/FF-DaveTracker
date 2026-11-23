@@ -42,7 +42,7 @@ async function launch() {
 async function main() {
   const server = await serve();
   const base = `http://localhost:${server.address().port}/`;
-  const gas = loadScript(KEY);
+  const gas = loadScript(KEY, 'look-only');
   const browser = await launch();
   const shotsDir = path.join(__dirname, 'screenshots');
   const shots = !!process.env.SCREENSHOTS;
@@ -607,6 +607,79 @@ async function main() {
     await a.click('[data-action="sync-now"]');
     await a.waitForFunction(() => !FF.timers.running() && FF.timers.onHold().length === 1, null, { timeout: 5000 });
     await a.evaluate(() => FF.store.remove('active', FF.timers.onHold()[0].id));
+  });
+
+  await step('share a view-only link: they see everything, change nothing', async () => {
+    await a.goto(base + '#settings');
+    // the main password is refused for sharing
+    await a.fill('#s-viewkey', KEY);
+    await a.click('form[data-form="share-make"] button[type=submit]');
+    assert.match(await a.textContent('#toast'), /main password/);
+    await a.fill('#s-viewkey', 'look-only');
+    await a.fill('#s-myname', 'Dave');
+    await a.click('form[data-form="share-make"] button[type=submit]');
+    await a.waitForSelector('#s-share');
+    const link = await a.inputValue('#s-share');
+    assert.match(link, /#view=[A-Za-z0-9_-]+$/);
+    const viewLink = base + link.slice(link.indexOf('#'));
+
+    // someone else opens it
+    const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, timezoneId: 'Australia/Melbourne' });
+    let posts = 0;
+    await ctx.route('https://script.google.com/**', async (route) => {
+      const req = route.request();
+      if (req.method() === 'POST') posts++;
+      const out = req.method() === 'POST' ? gas.call.post(req.postData()) : gas.call.get(Object.fromEntries(new URL(req.url()).searchParams));
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(out) });
+    });
+    const v = await ctx.newPage();
+    const errs = [];
+    v.on('pageerror', (e) => errs.push(e.message));
+    await v.goto(viewLink);
+    await v.waitForFunction(() => FF.store.all('log').length > 0, null, { timeout: 5000 });
+    assert.match(await v.textContent('#viewerBanner'), /Viewing Dave's tracker · view only/);
+    assert.match(await v.textContent('#syncPill'), /View only/);
+    assert.strictEqual(await v.evaluate(() => location.hash), '#today', 'link code removed from the address bar');
+    const ownerCount = gas.call.get({ action: 'all', key: KEY }).data.log.length;
+    assert.strictEqual(await v.evaluate(() => FF.store.all('log').length), ownerCount, 'sees all the data');
+    // the same breakdown: charts and day history
+    await v.waitForSelector('.day-ring svg');
+    assert.strictEqual(await v.isVisible('.start-card'), false, 'no start box');
+    await v.shot && 0;
+    await v.screenshot({ path: path.join(__dirname, 'screenshots', 'viewer-today.png'), fullPage: true }).catch(() => {});
+    await v.goto(viewLink.split('#')[0] + '#log');
+    await v.waitForSelector('.day-nav');
+    await v.click('.day-nav [aria-label="Previous day"]'); // looking around is fine
+    await v.click('.day-nav [aria-label="Next day"]');
+    // trying to change something is blocked
+    if (await v.$('.entry')) {
+      await v.click('.entry >> nth=0');
+      assert.match(await v.textContent('#toast'), /View only/);
+      assert.strictEqual(await v.evaluate(() => document.getElementById('modal').open), false);
+    }
+    await v.goto(viewLink.split('#')[0] + '#plan');
+    const tick = await v.$('.tick input');
+    if (tick) assert.strictEqual(await tick.evaluate((e) => getComputedStyle(e).pointerEvents), 'none');
+    // even a sneaky change in code never reaches the Sheet
+    await v.evaluate(() => FF.store.upsert('log', { date: FF.util.today(), start: '01:00', end: '02:00', minutes: 60, task: 'Sneaky', worked: 'Solo' }));
+    await v.waitForTimeout(1800);
+    assert.strictEqual(posts, 0, 'viewer never sends changes');
+    assert.ok(!gas.call.get({ action: 'all', key: KEY }).data.log.some((e) => e.task === 'Sneaky'));
+    // settings shows the viewer panel; stop viewing clears it
+    await v.goto(viewLink.split('#')[0] + '#settings');
+    assert.match(await v.textContent('#view'), /You're looking at Dave's F&F Tracker/);
+    await v.click('[data-action="viewer-stop"]');
+    await v.click('#confirm-modal button[type=submit]');
+    assert.strictEqual(await v.evaluate(() => FF.store.all('log').length), 0);
+    assert.strictEqual(await v.isVisible('#viewerBanner'), false);
+    assert.deepStrictEqual(errs, []);
+    await ctx.close();
+
+    // opening the link on a browser that's connected as the owner asks first
+    await b.goto(viewLink);
+    await b.waitForSelector('#confirm-modal[open]');
+    await b.click('#confirm-modal [data-close].btn');
+    assert.strictEqual(await b.evaluate(() => FF.store.settings().role), 'edit', 'owner stays the owner');
   });
 
   await step('timer survives a page reload', async () => {

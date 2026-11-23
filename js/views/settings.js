@@ -4,7 +4,58 @@ FF.views.settings = (() => {
   const S = FF.store;
   const esc = U.esc;
 
+  function viewerRender() {
+    const s = S.settings();
+    const st = FF.sync.status();
+    const who = FF.viewer.ownerName();
+    return `
+      <div class="page-head"><h1>Settings</h1></div>
+      <section class="card">
+        <div class="card-head"><h3>👀 View only</h3><span class="sync-dot ${st.state}">${esc(st.label)}</span></div>
+        <p>You're looking at <b>${esc(who ? `${who}'s` : 'someone\'s')}</b> F&amp;F Tracker. You can see everything (Today, Plan, Review and the Log day by day) but you can't change anything.</p>
+        <p class="muted small">It refreshes by itself every minute. Last update: ${s.lastSync ? esc(new Date(s.lastSync).toLocaleString('en-AU')) : 'not yet'}</p>
+        ${st.error ? `<p class="error-box">${esc(st.error)}</p>` : ''}
+        <div class="btn-row wrap">
+          <button class="btn primary" data-action="sync-now">↻ Refresh now</button>
+          <button class="btn ghost" data-action="viewer-stop">Stop viewing</button>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-head"><h3>About</h3></div>
+        <p class="muted small">F&amp;F Tracker v${esc(FF.VERSION)}</p>
+      </section>`;
+  }
+
+  function shareCard() {
+    const s = S.settings();
+    return `
+      <section class="card">
+        <div class="card-head"><h3>Share a view-only link</h3></div>
+        <p class="muted">Let someone see your tracker the way you do (Today, Plan, Review, Log and charts) without being able to change anything.
+        It needs a second "look only" password (<b>VIEW_KEY</b>) in your Sheet script. <a href="https://github.com/davanlind/FF-DaveTracker/blob/main/docs/GOOGLE_SHEET_SETUP.md#share-a-view-only-link" target="_blank" rel="noopener">How to add it</a></p>
+        <form data-form="share-make" autocomplete="off">
+          <div class="row2">
+            <div class="field"><label for="s-viewkey">View-only key</label>
+              <input id="s-viewkey" name="viewKey" value="${esc(s.viewKey || '')}" placeholder="The VIEW_KEY from your script" required></div>
+            <div class="field"><label for="s-myname">Your name <span class="muted">(shown to them)</span></label>
+              <input id="s-myname" name="myName" value="${esc(s.myName || '')}" placeholder="e.g. Dave" autocapitalize="words"></div>
+          </div>
+          <button class="btn primary" type="submit">Make link</button>
+        </form>
+        ${s.shareLink ? `
+          <div class="share-out">
+            <input id="s-share" value="${esc(s.shareLink)}" readonly data-nokeep aria-label="View-only link">
+            <div class="btn-row wrap">
+              <button class="btn" data-action="share-copy">⧉ Copy link</button>
+              ${navigator.share ? '<button class="btn ghost" data-action="share-send">Send…</button>' : ''}
+            </div>
+            <p class="hint">Anyone with this link can <b>see</b> your tracker (not change it). To stop it working, change VIEW_KEY in your script and deploy a new version.</p>
+          </div>` : ''}
+      </section>`;
+  }
+
   function render() {
+    if (FF.viewer && FF.viewer.isOn()) return viewerRender();
     const s = S.settings();
     const st = FF.sync.status();
     const connected = FF.sync.configured();
@@ -31,6 +82,8 @@ FF.views.settings = (() => {
                <button class="btn primary" type="submit">Connect</button>
              </form>`}
       </section>
+
+      ${connected ? shareCard() : ''}
 
       <section class="card">
         <div class="card-head"><h3>Backup</h3></div>
@@ -82,6 +135,48 @@ FF.views.settings = (() => {
       btn.disabled = false;
       btn.textContent = 'Connect';
     }
+  };
+
+  FF.forms['share-make'] = async (form) => {
+    const s = S.settings();
+    const viewKey = form.elements.viewKey.value.trim();
+    const myName = form.elements.myName.value.trim();
+    if (!viewKey) return FF.ui.toast('Type the VIEW_KEY from your script', 'error');
+    if (viewKey === s.key) return FF.ui.toast("That's your main password. Use the separate VIEW_KEY, so the link can't change anything.", 'error');
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      const res = await FF.sync.ping(s.url, viewKey);
+      if (res.role !== 'view') throw new Error('That key can change things. Use the VIEW_KEY.');
+      S.setSettings({ viewKey, myName, shareLink: FF.viewer.makeLink(s.url, viewKey, myName) });
+      FF.app.render();
+      FF.ui.toast('Link ready. Copy it and send it.', 'ok');
+    } catch (e) {
+      FF.ui.toast(/Wrong secret key/.test(e.message) ? "The Sheet doesn't know that view key yet. Check VIEW_KEY in your script and deploy a new version." : e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Make link';
+    }
+  };
+
+  FF.actions['share-copy'] = async () => {
+    const link = S.settings().shareLink;
+    if (!link) return;
+    const ok = await FF.viewer.copy(link);
+    FF.ui.toast(ok ? 'Link copied' : 'Press and hold the link to copy it', ok ? 'ok' : '');
+    if (!ok) document.getElementById('s-share')?.select();
+  };
+
+  FF.actions['share-send'] = () => {
+    const s = S.settings();
+    if (navigator.share && s.shareLink) {
+      navigator.share({ title: 'F&F Tracker (view only)', text: `${s.myName ? `${s.myName}'s` : 'My'} work tracker, view only`, url: s.shareLink }).catch(() => {});
+    }
+  };
+
+  FF.actions['viewer-stop'] = async () => {
+    const ok = await FF.ui.confirm('Stop viewing?', 'This removes the view-only copy from this browser. You can open the link again any time.', 'Stop viewing');
+    if (ok) FF.viewer.stop();
   };
 
   FF.actions['sync-now'] = async (el) => {

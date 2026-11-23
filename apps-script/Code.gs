@@ -18,6 +18,11 @@
 // can read and change your tracker data.
 const SECRET_KEY = 'CHANGE-ME';
 
+// Optional: a SECOND password that can only LOOK. Put it in a view-only link
+// (tracker Settings → Share a view-only link) so someone can see your tracker
+// without being able to change anything. Leave it as '' to turn this off.
+const VIEW_KEY = '';
+
 /**
  * What goes in each tab. [field in the app, column header in the Sheet, kind, number format]
  * kinds: text | date | number | bool | json (a list stored as text)
@@ -127,9 +132,9 @@ const SCHEMA = {
 function doGet(e) {
   return respond_(() => {
     const p = (e && e.parameter) || {};
-    checkKey_(p.key);
+    const role = checkKey_(p.key, true);
     if (p.action === 'ping') {
-      return { ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName() };
+      return { ok: true, sheet: SpreadsheetApp.getActiveSpreadsheet().getName(), role };
     }
     if (p.action === 'all') return { ok: true, data: readAll_() };
     if (p.action === 'summary') {
@@ -146,7 +151,7 @@ function doGet(e) {
 function doPost(e) {
   return respond_(() => {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    checkKey_(body.key);
+    checkKey_(body.key, false);
     if (body.action !== 'apply') throw new Error('Unknown action');
     const ops = Array.isArray(body.ops) ? body.ops : [];
     const lock = LockService.getScriptLock();
@@ -183,9 +188,16 @@ function respond_(fn) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function checkKey_(key) {
+/** Returns 'edit' for the main password, 'view' for the look-only one (when allowed). */
+function checkKey_(key, viewAllowed) {
   if (SECRET_KEY === 'CHANGE-ME') throw new Error('Set SECRET_KEY in the Apps Script first, then deploy a new version.');
-  if (String(key || '') !== SECRET_KEY) throw new Error('Wrong secret key.');
+  const k = String(key || '');
+  if (k === SECRET_KEY) return 'edit';
+  if (VIEW_KEY && VIEW_KEY !== SECRET_KEY && k === VIEW_KEY) {
+    if (viewAllowed) return 'view';
+    throw new Error('This link is view-only, so it can\'t change anything.');
+  }
+  throw new Error('Wrong secret key.');
 }
 
 function schemaFor_(table) {

@@ -110,6 +110,9 @@ FF.store = (() => {
   const get = (table, id) => data[table].find((r) => r.id === id) || null;
 
   /* ---------- writing ---------- */
+  // Viewing someone else's tracker: changes stay on screen only and are never sent.
+  const viewOnly = () => settings.connected && settings.role === 'view';
+
   function upsert(table, record, { silent = false } = {}) {
     if (!record.id) record.id = FF.util.uid(PREFIX[table]);
     if (table === 'log') record.hours = Math.round((Number(record.minutes) / 60) * 100) / 100;
@@ -118,7 +121,7 @@ FF.store = (() => {
     const i = arr.findIndex((r) => r.id === rec.id);
     if (i >= 0) arr[i] = rec;
     else arr.push(rec);
-    queue.push({ op: 'upsert', table, record: rec });
+    if (!viewOnly()) queue.push({ op: 'upsert', table, record: rec });
     persist();
     if (!silent) emit();
     FF.sync && FF.sync.schedule();
@@ -127,7 +130,7 @@ FF.store = (() => {
 
   function remove(table, id, { silent = false } = {}) {
     data[table] = data[table].filter((r) => r.id !== id);
-    queue.push({ op: 'delete', table, id });
+    if (!viewOnly()) queue.push({ op: 'delete', table, id });
     persist();
     if (!silent) emit();
     FF.sync && FF.sync.schedule();
@@ -187,6 +190,14 @@ FF.store = (() => {
     emit();
     FF.sync && FF.sync.schedule();
   }
+  /** Empty this browser's copy (used when starting/stopping a view-only link). */
+  function resetAll() {
+    data = emptyData();
+    queue = [];
+    persist();
+    emit();
+  }
+
   const exportBackup = () => ({ app: 'FF Tracker', version: FF.VERSION, exportedAt: new Date().toISOString(), ...data });
 
   /* ---------- settings ---------- */
@@ -220,7 +231,7 @@ FF.store = (() => {
   return {
     TABLES, all, get, upsert, remove,
     pendingCount, queueSnapshot, ackQueue, queueEverything, replaceAll,
-    importBackup, exportBackup,
+    importBackup, exportBackup, resetAll,
     settings: getSettings, setSettings,
     currentLocation: () => settings.currentLocation || '',
     subscribe, emit,

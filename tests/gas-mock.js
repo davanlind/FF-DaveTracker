@@ -92,7 +92,7 @@ function makeSpreadsheet() {
 }
 
 /** Load Code.gs with a fresh fake spreadsheet. Returns { doGet, doPost, ss, call } */
-function loadScript(secret = 'test-key') {
+function loadScript(secret = 'test-key', viewKey = '') {
   const ss = makeSpreadsheet();
   const pad = (n) => String(n).padStart(2, '0');
   const context = {
@@ -114,6 +114,7 @@ function loadScript(secret = 'test-key') {
   vm.createContext(context);
   let code = fs.readFileSync(path.join(__dirname, '..', 'apps-script', 'Code.gs'), 'utf8');
   code = code.replace("const SECRET_KEY = 'CHANGE-ME';", `const SECRET_KEY = ${JSON.stringify(secret)};`);
+  code = code.replace("const VIEW_KEY = '';", `const VIEW_KEY = ${JSON.stringify(viewKey)};`);
   vm.runInContext(code, context);
   const call = {
     get: (params) => JSON.parse(context.doGet({ parameter: params }).getContent()),

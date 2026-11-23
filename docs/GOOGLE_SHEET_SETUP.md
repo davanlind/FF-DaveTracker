@@ -70,6 +70,24 @@ If you (or an AI) change `Code.gs`, paste the new version into the editor, save,
 Doing it this way keeps the **same URL**, so you don't have to reconnect devices.
 (Clicking "New deployment" again would give you a different URL.)
 
+## Share a view-only link
+
+Want someone (e.g. your manager) to see your tracker the way you do (Today, Plan, Review,
+the Log day by day, all the charts) without being able to change anything?
+
+1. In the Apps Script, find this line near the top and put a **second** password between the quotes
+   (different from SECRET_KEY):
+   ```js
+   const VIEW_KEY = 'peek-pallet-2093';
+   ```
+2. Save, then **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**.
+3. In the tracker: **Settings → Share a view-only link**. Type the VIEW_KEY and your name, tap
+   **Make link**, then **Copy link** and send it.
+
+When they open the link, a blue bar says *Viewing Dave's tracker · view only*. All buttons that
+change things are gone, and the Sheet refuses any change made with the VIEW_KEY anyway.
+To stop a link working, change VIEW_KEY and deploy a new version.
+
 ## Using the Sheet
 
 - The **Log** tab is your ongoing record: one row per stint of work, with Date, Start, End,

@@ -87,6 +87,17 @@ docs/ANDROID_APP.md        install/update steps for the APK (beginner friendly)
   ScalingLazyColumns with crown scrolling (`crownScroll` modifier). Swipe right to go back (SwipeDismissableNavHost).
 - Versions: Compose BOM 2024.12.01, Wear Compose 1.4.0, Kotlin 2.1.0 compose plugin, minSdk 30.
 
+## View-only links
+
+- `VIEW_KEY` in Code.gs is a second password: `checkKey_` returns role `'view'` for it on GET (ping/all/summary) and
+  **refuses it on POST**. Ping returns `role`. That's the real protection; the app's guards are just for a clean UI.
+- `js/viewer.js`: share links are `<site>#view=<base64url JSON {u, k, n}>`. Opening one stores settings with
+  `role: 'view'` (after confirming if this browser has its own tracker), empties local data and pulls.
+- In view mode: `<html class="viewer">` hides editing controls (CSS in styles.css), `app.js` blocks any
+  `data-action`/`data-change`/`data-form` not in `FF.viewer.ALLOWED_*`, the store never queues changes, flush is a no-op,
+  and the page re-pulls every minute. **New editing controls must be hidden for viewers, and new
+  read-only actions must be added to the allow-lists.**
+
 ## Data model
 
 Five tables. The same names are used in the browser (`FF.store.all('log')`) and as tabs in the Sheet.

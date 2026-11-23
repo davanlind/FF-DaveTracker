@@ -26,6 +26,10 @@ FF.sync = (() => {
 
   function status() {
     if (!configured()) return { state: 'local', label: 'Only on this device', error: '' };
+    if (S.settings().role === 'view') {
+      if (state === 'error') return { state, label: 'View only · offline', error: lastError };
+      return { state: 'synced', label: 'View only', error: '' };
+    }
     if (state === 'syncing') return { state, label: 'Saving…', error: '' };
     if (state === 'error') return { state, label: 'Sheet not reached', error: lastError };
     if (S.pendingCount()) return { state: 'pending', label: `${S.pendingCount()} to send`, error: '' };
@@ -65,6 +69,22 @@ FF.sync = (() => {
     return json;
   }
 
+  /** Check a URL + key without touching this device's settings. Returns { ok, sheet, role }. */
+  async function ping(url, key) {
+    const u = new URL(url);
+    u.searchParams.set('action', 'ping');
+    u.searchParams.set('key', key);
+    let res;
+    try {
+      res = await fetch(u.toString(), { redirect: 'follow' });
+    } catch (e) {
+      throw new Error('No connection to Google. Are you online?');
+    }
+    const json = await readJson(res);
+    if (!json.ok) throw new Error(json.error || 'The Sheet said no.');
+    return json;
+  }
+
   /** Check a URL + key before saving them. */
   async function test(url, key) {
     const prev = S.settings();
@@ -80,6 +100,10 @@ FF.sync = (() => {
   /** Send waiting changes to the Sheet. */
   async function flush() {
     if (!configured() || busy) return;
+    if (S.settings().role === 'view') {
+      S.ackQueue(S.queueSnapshot().n); // a viewer never sends changes
+      return;
+    }
     const { n, ops } = S.queueSnapshot();
     if (!n) {
       if (state !== 'error') setState('synced');
@@ -123,16 +147,19 @@ FF.sync = (() => {
   function shareWithWatch() {
     if (!window.FFAndroid || !window.FFAndroid.shareConfig) return;
     const s = S.settings();
+    const own = configured() && s.role !== 'view';
     try {
-      window.FFAndroid.shareConfig(configured() ? s.url : '', configured() ? s.key : '');
+      window.FFAndroid.shareConfig(own ? s.url : '', own ? s.key : '');
     } catch (e) { /* no watch */ }
   }
 
   /** First connection from this device: send what's here, then load what's there. */
   async function connect(url, key) {
-    await test(url, key);
-    S.setSettings({ url, key, connected: true });
-    S.queueEverything();
+    const res = await test(url, key);
+    const role = res.role === 'view' ? 'view' : 'edit';
+    S.setSettings({ url, key, connected: true, role });
+    if (role === 'edit') S.queueEverything();
+    else S.resetAll();
     shareWithWatch();
     await pull();
   }
@@ -160,7 +187,11 @@ FF.sync = (() => {
       if (!last || Date.now() - new Date(last).getTime() > 60 * 1000) pull().catch(() => {});
     });
     window.addEventListener('online', () => configured() && flush().catch(() => {}));
+    // viewers get fresh numbers every minute while the page is open
+    setInterval(() => {
+      if (configured() && S.settings().role === 'view' && document.visibilityState === 'visible') pull().catch(() => {});
+    }, 60 * 1000);
   }
 
-  return { configured, status, test, flush, pull, connect, disconnect, schedule, start };
+  return { configured, status, ping, test, flush, pull, connect, disconnect, schedule, start };
 })();

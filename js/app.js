@@ -47,6 +47,13 @@ FF.app = (() => {
   }
 
   function renderStatus() {
+    const viewing = FF.viewer && FF.viewer.isOn();
+    document.documentElement.classList.toggle('viewer', viewing);
+    const banner = document.getElementById('viewerBanner');
+    if (banner) {
+      banner.hidden = !viewing;
+      if (viewing) banner.innerHTML = `👀 Viewing <b>${FF.util.esc(FF.viewer.ownerName() || 'a')}${FF.viewer.ownerName() ? "'s" : ''}</b> tracker · view only`;
+    }
     const pill = document.getElementById('syncPill');
     const st = FF.sync.status();
     pill.className = `sync-pill ${st.state}`;
@@ -85,16 +92,25 @@ FF.app = (() => {
   }
 
   function wire() {
+    const viewBlocked = (kind, name) => {
+      if (!FF.viewer || !FF.viewer.isOn()) return false;
+      const ok = { action: FF.viewer.ALLOWED_ACTIONS, change: FF.viewer.ALLOWED_CHANGES, form: FF.viewer.ALLOWED_FORMS }[kind];
+      if (ok.has(name)) return false;
+      FF.ui.toast(`View only: you can look but not change ${FF.viewer.ownerName() ? `${FF.viewer.ownerName()}'s` : 'this'} tracker`);
+      return true;
+    };
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-action]');
       if (!el || !FF.actions[el.dataset.action]) return;
       e.preventDefault();
+      if (viewBlocked('action', el.dataset.action)) return;
       FF.actions[el.dataset.action](el, e);
     });
     document.addEventListener('submit', (e) => {
       const form = e.target.closest('form[data-form]');
       if (!form || !FF.forms[form.dataset.form]) return;
       e.preventDefault();
+      if (viewBlocked('form', form.dataset.form)) return;
       FF.forms[form.dataset.form](form, e);
     });
     document.addEventListener('input', (e) => {
@@ -103,9 +119,18 @@ FF.app = (() => {
     });
     document.addEventListener('change', (e) => {
       const el = e.target.closest('[data-change]');
-      if (el && FF.changes[el.dataset.change]) FF.changes[el.dataset.change](el, e);
+      if (!el || !FF.changes[el.dataset.change]) return;
+      if (viewBlocked('change', el.dataset.change)) {
+        render(); // put the checkbox/dropdown back
+        return;
+      }
+      FF.changes[el.dataset.change](el, e);
     });
     window.addEventListener('hashchange', () => {
+      if (/^#view=/.test(location.hash)) {
+        FF.viewer.openFromHash();
+        return;
+      }
       render();
       window.scrollTo(0, 0);
     });
@@ -129,7 +154,9 @@ FF.app = (() => {
   function start() {
     if (FF.isApp) document.documentElement.classList.add('in-app');
     wire();
+    const viaLink = /^#view=/.test(location.hash); // opened a view-only link
     render();
+    if (viaLink) FF.viewer.openFromHash();
     FF.sync.start();
   }
 

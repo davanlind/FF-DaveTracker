@@ -31,7 +31,7 @@ test('refuses to run until SECRET_KEY is changed', () => {
 test('ping works with the right key', () => {
   const { call } = loadScript();
   const r = call.get({ action: 'ping', key: 'test-key' });
-  assert.deepStrictEqual(r, { ok: true, sheet: 'Test Tracker Sheet' });
+  assert.deepStrictEqual(r, { ok: true, sheet: 'Test Tracker Sheet', role: 'edit' });
 });
 
 test('upsert creates tabs with headers and rows; read returns the same values', () => {
@@ -123,6 +123,23 @@ test('summary (for the watch) only returns recent log rows', () => {
   assert.deepStrictEqual(r.data.log.map((x) => x.id), ['log_new']);
   assert.strictEqual(r.data.tasks.length, 1);
   assert.strictEqual(call.get({ action: 'summary', key: 'nope' }).ok, false);
+});
+
+test('view-only key can read but never write', () => {
+  const { call } = loadScript('test-key', 'look-only');
+  call.post({ key: 'test-key', action: 'apply', ops: [{ op: 'upsert', table: 'tasks', record: { id: 'task_1', name: 'Photoshoot' } }] });
+  assert.strictEqual(call.get({ action: 'ping', key: 'look-only' }).role, 'view');
+  assert.strictEqual(call.get({ action: 'all', key: 'look-only' }).data.tasks.length, 1);
+  assert.strictEqual(call.get({ action: 'summary', key: 'look-only' }).ok, true);
+  const w = call.post({ key: 'look-only', action: 'apply', ops: [{ op: 'delete', table: 'tasks', id: 'task_1' }] });
+  assert.strictEqual(w.ok, false);
+  assert.match(w.error, /view-only/);
+  assert.strictEqual(call.get({ action: 'all', key: 'test-key' }).data.tasks.length, 1, 'nothing changed');
+});
+
+test('view key is off when empty', () => {
+  const { call } = loadScript('test-key', '');
+  assert.match(call.get({ action: 'ping', key: '' }).error, /Wrong secret key/);
 });
 
 test('bad input gives a readable error, not a crash', () => {
