@@ -6,6 +6,7 @@
  *   planItems  tasks planned inside a plan, each with a target time
  *   log        time actually worked (one row per stint of work)
  *   active     tasks currently being timed or on hold (see js/timers.js)
+ *   colors     the colour chosen for each task name (see js/colors.js)
  *
  * Every change is saved to localStorage straight away AND added to a "queue".
  * FF.sync sends the queue to the Google Sheet when a connection is set up,
@@ -18,8 +19,8 @@ FF.store = (() => {
     settings: 'ff.settings.v1',
     oldTimer: 'ff.timer.v1', // v1.0 single timer; moved into 'active' on load
   };
-  const TABLES = ['tasks', 'plans', 'planItems', 'log', 'active'];
-  const PREFIX = { tasks: 'task', plans: 'plan', planItems: 'item', log: 'log', active: 'act' };
+  const TABLES = ['tasks', 'plans', 'planItems', 'log', 'active', 'colors'];
+  const PREFIX = { tasks: 'task', plans: 'plan', planItems: 'item', log: 'log', active: 'act', colors: 'color' };
 
   const load = (k, fallback) => {
     try {
@@ -37,7 +38,7 @@ FF.store = (() => {
     }
   };
 
-  const emptyData = () => ({ tasks: [], plans: [], planItems: [], log: [], active: [] });
+  const emptyData = () => ({ tasks: [], plans: [], planItems: [], log: [], active: [], colors: [] });
 
   let data = Object.assign(emptyData(), load(KEYS.data, {}));
   let queue = load(KEYS.queue, []);
@@ -86,6 +87,10 @@ FF.store = (() => {
         updatedAt: str(r.updatedAt),
       };
     },
+    colors: (r) => ({
+      id: str(r.id), name: str(r.name), color: str(r.color).toLowerCase(),
+      auto: bool(r.auto), updatedAt: str(r.updatedAt),
+    }),
     log: (r) => ({
       id: str(r.id), date: str(r.date), start: str(r.start), end: str(r.end),
       minutes: num(r.minutes), hours: num(r.hours), task: str(r.task),

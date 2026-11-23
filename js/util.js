@@ -3,7 +3,7 @@
  * and clock times as 'HH:MM' strings. This avoids time-zone surprises. */
 window.FF = window.FF || {};
 
-FF.VERSION = '1.4.0';
+FF.VERSION = '1.5.0';
 
 /** True when running inside the Android app (android/ folder), false on the website. */
 FF.isApp = !!window.FFAndroid;

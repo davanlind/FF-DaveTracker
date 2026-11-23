@@ -25,6 +25,8 @@ js/util.js                 FF.util: dates ('YYYY-MM-DD' strings), times ('HH:MM'
 js/store.js                FF.store: data in localStorage + change queue; FF.model: questions about the data
 js/sync.js                 FF.sync: talks to the Apps Script web app (Google Sheet)
 js/timers.js               FF.timers: open tasks (one running, others on hold), pause/resume/switch, finish → log rows
+js/colors.js               FF.colors: a colour per task name (auto from a validated palette, or user-picked), picker pop-up
+js/charts.js               FF.charts: "Logged today" clock ring (12h, outer AM / inner PM) + bars per task (SVG/HTML strings)
 js/ui.js                   FF.ui: modal, confirm, toast, shared forms (log entry form, plan item form)
 js/views/*.js              one file per screen: today, plan, review, log, tasks, settings
 js/app.js                  router (#today, #plan…), click/submit/change wiring, timer tick
@@ -81,6 +83,7 @@ Five tables. The same names are used in the browser (`FF.store.all('log')`) and 
 | `plans` | Plans | `id, start` (a Monday), `end` (inclusive), `weeks` (1 or 2), `notes` |
 | `planItems` | Plan Items | `id, planId, planStart, taskId` ('' for one-off), `task` (name), `type` ('Repeatable'/'One-off'), `targetMinutes, day` ('' = any day), `done, notes` |
 | `log` | Log | `id, date, start, end, minutes, hours, task, type, worked` ('Solo'/'With help'), `helpers, notes, planId, planItemId, taskId` |
+| `colors` | Colours | `id` (= `color:` + lower-case task name), `name, color` (#rrggbb), `auto` (true if picked automatically) |
 | `active` | Active timers | `id, task, type, taskId, planItemId, planId, segments` (array of `{start, end}` ISO times; `end` '' = running). Stored as JSON text in the Sheet (kind `json`). |
 
 Every record also has `updatedAt`. IDs are strings made by `FF.util.uid(prefix)`.
@@ -113,6 +116,15 @@ SCREENSHOTS=1 npm run test:e2e     # also saves screenshots to tests/screenshots
 `tests/gas-mock.js` fakes just enough of SpreadsheetApp to run `Code.gs` in Node. The e2e test routes
 `script.google.com` requests to that fake, so the app and connector are tested together. Add a step to
 `tests/e2e.test.js` for any new feature. Run the tests before you commit.
+
+## Charts and colours
+
+- Task colours come from `FF.colors.PALETTE`, 8 colours checked for colour-blind safety with the dataviz skill's
+  `validate_palette.js` (light mode, white card). Don't add generated colours to the automatic set; the picker has extras.
+  Three palette colours are under 3:1 contrast on white, so charts must always show task names/times as text too.
+- Colour follows the task **name** (not its rank), assigned the first time a task appears and then saved (synced).
+- `FF.charts.dayRing` draws log entries plus open timer segments (faded). Arcs are split at midday onto the AM/PM rings.
+  Today re-renders once a minute (`tick()` in app.js) so the "now" hand moves, but not while a pop-up or input is in use.
 
 ## Conventions
 

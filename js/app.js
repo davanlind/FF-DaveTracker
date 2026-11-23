@@ -43,7 +43,7 @@ FF.app = (() => {
     document.querySelectorAll('#tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === name));
     document.title = `${FF.views[name].title} · F&F Tracker`;
     renderStatus();
-    tick();
+    updateClocks();
   }
 
   function renderStatus() {
@@ -55,7 +55,22 @@ FF.app = (() => {
   }
 
   /** Update running clocks every second without re-drawing the screen. */
+  let lastMinute = new Date().getMinutes();
   function tick() {
+    // once a minute, redraw Today so the clock chart's "now" hand and running arc move
+    const minute = new Date().getMinutes();
+    if (minute !== lastMinute) {
+      lastMinute = minute;
+      const busy = document.querySelector('dialog[open]') || (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName));
+      if (current() === 'today' && !busy) {
+        render();
+        return;
+      }
+    }
+    updateClocks();
+  }
+
+  function updateClocks() {
     document.querySelectorAll('.clock[data-clock]').forEach((el) => {
       const r = S.get('active', el.dataset.clock);
       if (r) el.textContent = FF.util.fmtClock(FF.timers.elapsedMs(r));
@@ -115,7 +130,6 @@ FF.app = (() => {
     if (FF.isApp) document.documentElement.classList.add('in-app');
     wire();
     render();
-    tick();
     FF.sync.start();
   }
 

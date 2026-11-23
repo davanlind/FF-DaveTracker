@@ -51,7 +51,7 @@ test('upsert creates tabs with headers and rows; read returns the same values', 
   const all = call.get({ action: 'all', key: 'test-key' });
   assert.strictEqual(all.ok, true);
   assert.deepStrictEqual(all.data.log[0], entry);
-  assert.deepStrictEqual(Object.keys(all.data).sort(), ['active', 'log', 'planItems', 'plans', 'tasks']);
+  assert.deepStrictEqual(Object.keys(all.data).sort(), ['active', 'colors', 'log', 'planItems', 'plans', 'tasks']);
 });
 
 test('upsert of the same id updates in place; delete removes the row', () => {

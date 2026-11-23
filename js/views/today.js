@@ -173,12 +173,14 @@ FF.views.today = (() => {
     const entries = M.logBetween(date, date);
     const total = U.sum(entries, (e) => e.minutes);
     return `
-      <section class="card">
+      <section class="card logged-today">
         <div class="card-head">
           <h3>Logged today</h3>
           <span class="small strong">${U.fmtMins(total)}</span>
         </div>
-        ${entries.length ? FF.views.log.entryList(entries) : '<p class="muted">Nothing logged yet today.</p>'}
+        ${FF.charts.dayRing(date)}
+        ${FF.charts.dayBars(date)}
+        ${entries.length ? `<h4 class="entries-head">Entries</h4>${FF.views.log.entryList(entries)}` : '<p class="muted">Nothing logged yet today.</p>'}
       </section>`;
   }
 

@@ -32,7 +32,7 @@ FF.views.log = (() => {
           <button class="entry" data-action="entry-edit" data-id="${esc(e.id)}">
             <span class="entry-time">${esc(e.start)}–${esc(e.end)}${showDate ? `<br><span class="muted">${esc(U.fmtDate(e.date, { weekday: 'short' }))}</span>` : ''}</span>
             <span class="entry-main">
-              <span class="entry-name">${esc(e.task)}</span>
+              <span class="entry-name"><i class="dot" style="background:${esc(FF.colors.colorFor(e.task))}"></i>${esc(e.task)}</span>
               <span class="entry-meta">
                 <span class="badge ${e.worked === 'With help' ? 'help' : 'solo'}">${e.worked === 'With help' ? `Help${e.helpers ? `: ${esc(e.helpers)}` : ''}` : 'Solo'}</span>
                 ${e.type === 'One-off' ? '<span class="badge">One-off</span>' : ''}

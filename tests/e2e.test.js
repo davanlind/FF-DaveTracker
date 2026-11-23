@@ -12,6 +12,7 @@ const { loadScript } = require('./gas-mock');
 
 const ROOT = path.join(__dirname, '..');
 const SHEET_URL = 'https://script.google.com/macros/s/TEST/exec';
+const FF_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
 const KEY = 'test-key';
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
@@ -178,6 +179,57 @@ async function main() {
     assert.strictEqual(e.minutes, 150);
   });
 
+  await step('Logged today: clock ring + bars per task, each task its own colour', async () => {
+    await a.goto(base + '#today');
+    await a.waitForSelector('.day-ring svg');
+    const expected = await a.evaluate(() => {
+      const today = FF.util.today();
+      const tot = {};
+      FF.store.all('log').filter((e) => e.date === today).forEach((e) => (tot[e.task] = (tot[e.task] || 0) + e.minutes));
+      return Object.entries(tot).sort((x, y) => y[1] - x[1]).map((x) => x[0]);
+    });
+    assert.ok(expected.length >= 2, 'test data has several tasks today');
+    const names = await a.$$eval('.task-bars .tb-name', (els) => els.map((e) => e.textContent));
+    assert.deepStrictEqual(names, expected, 'bars sorted longest first');
+    const arcs = await a.$$eval('.ring-arc', (els) => els.length);
+    assert.ok(arcs >= expected.length, `an arc per stretch (got ${arcs})`);
+    const colours = await a.$$eval('.task-bars .swatch', (els) => els.map((e) => getComputedStyle(e).backgroundColor));
+    assert.strictEqual(new Set(colours).size, colours.length, 'different colour for each task today');
+    // the same colour shows next to the entry in the list
+    const dot = await a.$eval('.entries .dot', (e) => getComputedStyle(e).backgroundColor);
+    assert.ok(colours.includes(dot));
+    // tap an arc to see what it was
+    await a.click('.ring-arc >> nth=0', { force: true });
+    assert.match(await a.textContent('#ringInfo'), /·/);
+    // hand for "now" is drawn
+    assert.strictEqual(await a.$$eval('.ring-hand', (e) => e.length), 1);
+    await a.shot('13-logged-today-charts');
+  });
+
+  await step('change a task colour from the chart', async () => {
+    await a.click('.task-bars [data-action="color-pick"][data-name="Marketing photoshoot"]');
+    await a.click('#modal .swatch-choice input[value="#0f8a8a"]', { force: true });
+    await a.shot('14-colour-picker');
+    await a.click('#modal button[type=submit]');
+    const bg = await a.$eval('.task-bars [data-name="Marketing photoshoot"]', (e) => getComputedStyle(e).backgroundColor);
+    assert.strictEqual(bg, 'rgb(15, 138, 138)');
+    const rec = await a.evaluate(() => FF.store.get('colors', 'color:marketing photoshoot'));
+    assert.deepStrictEqual([rec.color, rec.auto], ['#0f8a8a', false]);
+    // custom colour
+    await a.click('.task-bars [data-action="color-pick"][data-name="Marketing photoshoot"]');
+    await a.$eval('#modal input[name=custom]', (el) => { el.value = '#123456'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    await a.click('#modal button[type=submit]');
+    assert.strictEqual(await a.evaluate(() => FF.colors.colorFor('Marketing photoshoot')), '#123456');
+    // and back to automatic
+    await a.click('.task-bars [data-action="color-pick"][data-name="Marketing photoshoot"]');
+    await a.click('#modal [data-extra="0"]');
+    const auto = await a.evaluate(() => FF.colors.colorFor('Marketing photoshoot'));
+    assert.ok(FF_PALETTE.includes(auto), auto);
+    await a.click('.task-bars [data-action="color-pick"][data-name="Marketing photoshoot"]');
+    await a.click('#modal .swatch-choice input[value="#0f8a8a"]', { force: true });
+    await a.click('#modal button[type=submit]');
+  });
+
   await step('review shows targets vs actual', async () => {
     await a.click('a[href="#review"]');
     await a.waitForSelector('.review-list');
@@ -239,6 +291,7 @@ async function main() {
     assert.strictEqual(all.planItems.length, 3);
     assert.strictEqual(all.log.length, 3);
     assert.strictEqual(all.log.find((x) => x.task === 'Showroom store run').worked, 'With help');
+    assert.strictEqual(all.colors.find((c) => c.name === 'Marketing photoshoot').color, '#0f8a8a', 'colours reach the Sheet');
     await a.shot('09-settings-connected');
   });
 
@@ -265,6 +318,7 @@ async function main() {
     await b.waitForSelector('[data-action="sync-now"]');
     assert.strictEqual(await b.evaluate(() => FF.store.all('log').length), 4);
     assert.strictEqual(await b.evaluate(() => FF.store.all('planItems').length), 3);
+    assert.strictEqual(await b.evaluate(() => FF.colors.colorFor('Marketing photoshoot')), '#0f8a8a', 'same colours on the other device');
   });
 
   await step('edit on one device, sync on the other', async () => {

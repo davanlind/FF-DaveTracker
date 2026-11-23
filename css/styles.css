@@ -182,6 +182,53 @@ textarea { resize: vertical; }
 .badge.help { background: var(--help-soft); color: var(--help); }
 .badge.plan { background: var(--hit-soft); color: var(--hit); }
 
+/* ---------- day charts (Logged today) ---------- */
+.day-ring { margin: 4px 0 8px; }
+.day-ring svg { display: block; width: 100%; max-width: 420px; margin: 0 auto; touch-action: manipulation; }
+.ring-track { fill: none; stroke: #efebe4; }
+.ring-tick { stroke: #ffffff; stroke-width: 2; }
+.ring-arc { fill: none; cursor: pointer; transition: opacity 0.15s; }
+.ring-arc.open { opacity: 0.45; }
+.day-ring.has-pick .ring-arc:not(.picked) { opacity: 0.25; }
+.day-ring.has-pick .ring-arc.picked { opacity: 1; }
+.ring-num { font-size: 13px; fill: var(--muted); text-anchor: middle; dominant-baseline: central; font-variant-numeric: tabular-nums; }
+.ring-num.major { font-size: 15px; font-weight: 700; fill: var(--ink); }
+.ring-hand { stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+.ring-hand-dot { fill: #fff; stroke: var(--ink); stroke-width: 2.5; }
+.ring-total { font-size: 30px; font-weight: 800; fill: var(--ink); text-anchor: middle; font-variant-numeric: tabular-nums; }
+.ring-sub { font-size: 12.5px; fill: var(--muted); text-anchor: middle; }
+.day-ring figcaption { text-align: center; }
+.ring-key { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.key-ring { display: inline-block; width: 18px; height: 8px; border-radius: 4px; margin-right: 5px; vertical-align: middle; background: #cfc9bf; }
+.key-ring.inner { width: 12px; }
+.key-ring.faded { background: var(--accent); opacity: 0.45; }
+.ring-info { margin-top: 8px; min-height: 2.6em; font-size: 0.9rem; font-weight: 600; padding: 8px 10px; background: var(--bg); border-radius: 10px; }
+.task-bars-head { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 4px; }
+.task-bars-head h4, .entries-head { margin: 0; font-size: 0.95rem; }
+.task-bars-head .hint { margin: 0; }
+.entries-head { margin: 18px 0 4px; }
+.task-bars { list-style: none; margin: 0; padding: 0; }
+.task-bars li { display: grid; grid-template-columns: 34px 1fr auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 5px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.task-bars li:first-child { border-top: 0; }
+.swatch { grid-row: 1 / span 2; width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.tb-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-val { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.tb-track { grid-column: 2 / span 2; display: flex; gap: 2px; height: 12px; }
+.tb-fill { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.tb-fill:first-child { border-radius: 2px 4px 4px 2px; }
+.tb-fill.open { opacity: 0.45; }
+.tb-fill[style*="width:0.00%"] { display: none; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.dot.big { width: 16px; height: 16px; vertical-align: -2px; }
+.swatch-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin: 12px 0; }
+.swatch-choice { position: relative; cursor: pointer; }
+.swatch-choice input { position: absolute; opacity: 0; }
+.swatch-choice span { display: block; aspect-ratio: 1; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+.swatch-choice input:checked + span { box-shadow: 0 0 0 3px var(--ink); }
+.swatch-choice input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.custom-color { display: flex; align-items: center; gap: 12px; }
+.custom-color input[type=color] { width: 64px; height: 40px; padding: 2px; }
+
 /* ---------- log entries ---------- */
 .entry { display: grid; grid-template-columns: 76px 1fr auto; gap: 10px; align-items: start; width: 100%; background: none; border: 0; border-top: 1px solid var(--line); padding: 10px 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .entries li:first-child .entry { border-top: 0; }
